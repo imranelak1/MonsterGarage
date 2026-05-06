@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Résultat import - Monster Garage{% endblock %}
+
+{% block content %}
+{% set mois_label = ['','Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'][mois] %}
+
+<section class="mb-6">
+    <p class="text-sm font-semibold text-slate-500">
+        <a class="hover:text-yellow-600" href="{{ url_for('rh.vue_mensuelle') }}">Livre de paie</a>
+        <span class="mx-1">›</span>
+        <a class="hover:text-yellow-600" href="{{ url_for('rh.import_excel') }}">Import Excel</a>
+        <span class="mx-1">›</span> Résultat
+    </p>
+    <h1 class="mt-1 text-3xl font-black tracking-tight text-slate-950">Import terminé — {{ mois_label }} {{ annee }}</h1>
+</section>
+
+<div class="mx-auto max-w-2xl grid gap-5">
+
+    {# ── KPIs ────────────────────────────────────────────────────────────── #}
+    <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center">
+            <p class="text-2xl font-black text-emerald-700">{{ resultat.salaires_crees }}</p>
+            <p class="mt-1 text-xs font-black uppercase tracking-wide text-emerald-600">Salaires</p>
+        </div>
+        <div class="rounded-xl border border-blue-200 bg-blue-50 p-4 text-center">
+            <p class="text-2xl font-black text-blue-700">{{ resultat.avances_creees }}</p>
+            <p class="mt-1 text-xs font-black uppercase tracking-wide text-blue-600">Avances / Op.</p>
+        </div>
+        <div class="rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-center">
+            <p class="text-2xl font-black text-yellow-700">{{ resultat.employes_crees | length }}</p>
+            <p class="mt-1 text-xs font-black uppercase tracking-wide text-yellow-600">Employés créés</p>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 text-center">
+            <p class="text-2xl font-black text-slate-700">{{ "%.2f"|format(resultat.total_importe) }}</p>
+            <p class="mt-1 text-xs font-black uppercase tracking-wide text-slate-500">Total DH</p>
+        </div>
+    </div>
+
+    {# ── Employés créés ──────────────────────────────────────────────────── #}
+    {% if resultat.employes_crees %}
+    <section class="rounded-lg border border-yellow-200 bg-yellow-50 p-4">
+        <h2 class="mb-2 text-sm font-black uppercase tracking-wide text-yellow-700">Nouveaux employés créés</h2>
+        <div class="flex flex-wrap gap-2">
+            {% for nom in resultat.employes_crees %}
+            <span class="rounded-full bg-yellow-200 px-3 py-1 text-xs font-black text-yellow-800">{{ nom }}</span>
+            {% endfor %}
+        </div>
+        <p class="mt-2 text-xs text-yellow-600">Vérifiez leurs fiches et complétez les informations manquantes.</p>
+    </section>
+    {% endif %}
+
+    {# ── Ignorés ─────────────────────────────────────────────────────────── #}
+    {% if resultat.ignores %}
+    <section class="rounded-lg border border-slate-200 bg-white p-4">
+        <h2 class="mb-2 text-sm font-black uppercase tracking-wide text-slate-500">Ignorés ({{ resultat.ignores|length }})</h2>
+        <ul class="grid gap-1 text-xs text-slate-500">
+            {% for msg in resultat.ignores %}
+            <li class="flex items-start gap-2">
+                <span class="mt-0.5 shrink-0 text-slate-300">—</span>
+                <span>{{ msg }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+    </section>
+    {% endif %}
+
+    {# ── Erreurs ─────────────────────────────────────────────────────────── #}
+    {% if resultat.erreurs %}
+    <section class="rounded-lg border border-red-200 bg-red-50 p-4">
+        <h2 class="mb-2 text-sm font-black uppercase tracking-wide text-red-600">Erreurs ({{ resultat.erreurs|length }})</h2>
+        <ul class="grid gap-1 text-xs text-red-700">
+            {% for msg in resultat.erreurs %}
+            <li>⚠ {{ msg }}</li>
+            {% endfor %}
+        </ul>
+    </section>
+    {% endif %}
+
+    {# ── Actions ─────────────────────────────────────────────────────────── #}
+    <div class="flex flex-wrap gap-3">
+        <a class="inline-flex h-11 items-center justify-center rounded-md bg-monster-jaune px-6 text-sm font-black text-black hover:bg-yellow-300"
+           href="{{ url_for('rh.vue_mensuelle', annee=annee, mois=mois) }}">
+            Voir le livre de paie {{ mois_label }} {{ annee }}
+        </a>
+        <a class="inline-flex h-11 items-center justify-center rounded-md border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 hover:bg-slate-50"
+           href="{{ url_for('rh.import_excel') }}">
+            Importer un autre fichier
+        </a>
+        {% if resultat.employes_crees %}
+        <a class="inline-flex h-11 items-center justify-center rounded-md border border-yellow-300 bg-yellow-50 px-5 text-sm font-black text-yellow-700 hover:bg-yellow-100"
+           href="{{ url_for('rh.liste_employes') }}">
+            Compléter les fiches employés
+        </a>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

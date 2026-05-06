@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Monster Garage ERP{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css') }}">
+    <script>
+        if (localStorage.getItem("monster.sidebar.hidden") === "1") {
+            document.documentElement.classList.add("mg-sidebar-hidden");
+        }
+    </script>
+</head>
+<body class="mg-shell">
+    {% if current_user.is_authenticated %}
+        {% macro nav_link(endpoint_prefix, href, label, icon) -%}
+            {% set active = (request.endpoint or '').startswith(endpoint_prefix) %}
+            <a class="mg-nav-link {% if active %}mg-nav-link-active{% endif %}" href="{{ href }}">
+                <span class="mg-nav-icon">{{ icon }}</span>
+                <span>{{ label }}</span>
+            </a>
+        {%- endmacro %}
+
+        <div class="mg-layout">
+            <button class="mg-sidebar-backdrop" type="button" data-sidebar-close aria-label="Fermer la navigation"></button>
+
+            <aside class="mg-sidebar">
+                <div class="flex items-center gap-3 p-5">
+                    <a class="mg-logo-box flex-1" href="{{ url_for('dashboard.accueil') }}">
+                        <img class="h-full max-h-12 w-full object-contain" src="{{ url_for('static', filename='img/logo_monster_garage.png') }}" alt="Monster Garage">
+                    </a>
+                    <button class="mg-menu-btn-dark shrink-0" type="button" data-sidebar-toggle title="Mode plein écran">
+                        <span class="mg-menu-lines" aria-hidden="true"><span></span><span></span><span></span></span>
+                        <span class="sr-only">Afficher ou cacher la navigation</span>
+                    </button>
+                </div>
+
+                <nav class="flex flex-1 flex-col gap-6 px-4 pb-5" aria-label="Navigation principale">
+                    <section class="grid gap-2">
+                        <p class="mg-nav-section">Principal</p>
+                        <div class="grid gap-1">
+                            {{ nav_link('dashboard.', url_for('dashboard.accueil'), 'Tableau de bord', 'TB') }}
+                            {{ nav_link('dossiers.', url_for('dossiers.liste'), 'Atelier & opérations', 'AT') }}
+                            <a class="mg-nav-link" href="{{ url_for('dossiers.liste') }}">
+                                <span class="mg-nav-icon">DV</span>
+                                <span>Devis</span>
+                            </a>
+                            {{ nav_link('factures.', url_for('factures.liste'), 'Facturation', 'FC') }}
+                        </div>
+                    </section>
+
+                    <section class="grid gap-2">
+                        <p class="mg-nav-section">Gestion</p>
+                        <div class="grid gap-1">
+                            {{ nav_link('clients.', url_for('clients.liste'), 'Clients & CRM', 'CL') }}
+                            {{ nav_link('vehicules.', url_for('vehicules.liste'), 'Véhicules', 'VH') }}
+                            <a class="mg-nav-link" href="#">
+                                <span class="mg-nav-icon">AP</span>
+                                <span>Approvisionnements</span>
+                            </a>
+                        </div>
+                    </section>
+
+                    <section class="grid gap-2">
+                        <p class="mg-nav-section">Pilotage</p>
+                        <div class="grid gap-1">
+                            {{ nav_link('rh.', url_for('rh.vue_mensuelle'), 'Ressources Humaines', 'RH') }}
+                            <a class="mg-nav-link" href="#">
+                                <span class="mg-nav-icon">RP</span>
+                                <span>Rapports</span>
+                            </a>
+                            {{ nav_link('parametres.', url_for('parametres.entreprise'), 'Paramètres', 'PR') }}
+                        </div>
+                    </section>
+                </nav>
+
+                <div class="border-t border-white/10 p-4">
+                    <button class="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400 transition hover:bg-white/10 hover:text-white" type="button" data-sidebar-toggle>
+                        <span class="mg-menu-lines" aria-hidden="true"><span></span><span></span><span></span></span>
+                        Plein écran
+                    </button>
+                </div>
+            </aside>
+
+            <header class="mg-topbar">
+                <div class="flex min-w-0 items-center gap-4 lg:gap-8">
+                    <button class="mg-menu-btn" type="button" data-sidebar-toggle title="Afficher ou cacher la navigation">
+                        <span class="mg-menu-lines" aria-hidden="true"><span></span><span></span><span></span></span>
+                        <span class="sr-only">Afficher ou cacher la navigation</span>
+                    </button>
+                    <a class="flex h-11 w-28 items-center justify-center rounded-xl border border-slate-200 bg-white p-2 shadow-sm lg:hidden" href="{{ url_for('dashboard.accueil') }}">
+                        <img class="h-full w-full object-contain" src="{{ url_for('static', filename='img/logo_monster_garage.png') }}" alt="Monster Garage">
+                    </a>
+                    <div class="hidden items-center gap-3 rounded-full border border-yellow-300/30 bg-yellow-100/70 px-4 py-2 sm:flex">
+                        <span class="h-2 w-2 rounded-full bg-monster-jaune shadow-[0_0_0_4px_rgba(255,216,0,0.18)]"></span>
+                        <span class="text-[10px] font-black uppercase tracking-[0.14em] text-black">Live workshop control</span>
+                    </div>
+                    <div class="hidden sm:block">
+                        <p class="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Site actuel</p>
+                        <p class="text-sm font-black text-slate-950">Monster Garage <span class="font-semibold text-slate-500">- Marrakech</span></p>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <a class="hidden h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-black uppercase tracking-[0.12em] text-slate-700 shadow-sm transition hover:border-slate-300 hover:text-black sm:inline-flex" href="{{ url_for('dossiers.nouveau') }}">
+                        Nouveau dossier
+                    </a>
+                    <div class="hidden items-center gap-3 rounded-xl border border-slate-200 bg-white py-1.5 pl-2 pr-3 shadow-sm sm:flex" data-user-topbar>
+                        <div class="grid h-9 w-9 place-items-center rounded-xl bg-black text-xs font-black text-monster-jaune">
+                            {{ current_user.nom_complet[:2]|upper }}
+                        </div>
+                        <div class="min-w-0">
+                            <p class="max-w-40 truncate text-sm font-black leading-4 text-slate-950">{{ current_user.nom_complet }}</p>
+                            <p class="text-[9px] font-black uppercase tracking-[0.14em] text-slate-400">{{ current_user.role_libelle }}</p>
+                        </div>
+                    </div>
+                    <form method="post" action="{{ url_for('auth.deconnexion') }}">
+                        <button class="h-10 rounded-xl bg-black px-4 text-xs font-black uppercase tracking-[0.12em] text-white transition hover:bg-red-600" type="submit">Sortir</button>
+                    </form>
+                </div>
+            </header>
+
+            <main class="mg-content">
+                {% include "partials/messages.html" %}
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+    {% else %}
+        <main class="min-h-screen bg-[#111111] text-slate-950">
+            {% block auth_content %}{% endblock %}
+        </main>
+    {% endif %}
+    <script>
+        (() => {
+            const root = document.documentElement;
+            const key = "monster.sidebar.hidden";
+            const desktopQuery = window.matchMedia("(min-width: 1024px)");
+
+            const setDesktopHidden = (hidden) => {
+                root.classList.toggle("mg-sidebar-hidden", hidden);
+                root.classList.remove("mg-sidebar-open");
+                localStorage.setItem(key, hidden ? "1" : "0");
+            };
+
+            const toggleSidebar = () => {
+                if (desktopQuery.matches) {
+                    setDesktopHidden(!root.classList.contains("mg-sidebar-hidden"));
+                    return;
+                }
+                root.classList.toggle("mg-sidebar-open");
+            };
+
+            document.querySelectorAll("[data-sidebar-toggle]").forEach((button) => {
+                button.addEventListener("click", toggleSidebar);
+            });
+
+            document.querySelectorAll("[data-sidebar-close]").forEach((button) => {
+                button.addEventListener("click", () => root.classList.remove("mg-sidebar-open"));
+            });
+
+            document.addEventListener("keydown", (event) => {
+                if (event.key === "Escape") {
+                    root.classList.remove("mg-sidebar-open");
+                }
+            });
+        })();
+    </script>
+</body>
+</html>

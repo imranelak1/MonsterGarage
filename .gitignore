@@ -1,0 +1,16 @@
+.venv/
+node_modules/
+__pycache__/
+*.py[cod]
+*.sqlite
+*.db
+*.db-*
+~$*.xlsx
+.env
+.pytest_cache/
+pytest-cache-files-*/
+.coverage
+htmlcov/
+instance/
+sauvegardes/**/*.zip
+app/static/css/tailwind.output.css

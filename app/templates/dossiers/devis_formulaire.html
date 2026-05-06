@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+
+{% block title %}Nouveau devis - {{ dossier.numero }}{% endblock %}
+
+{% block content %}
+{% set devis_reference = dossier.dernier_devis %}
+{% set is_sntl = dossier.client.type == 'sntl' %}
+
+<section class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div>
+        <p class="text-sm font-semibold text-slate-500">{{ dossier.numero }}</p>
+        <h1 class="mt-1 text-3xl font-black tracking-tight text-slate-950">
+            {% if devis_reference %}Nouvelle version du devis{% else %}Nouveau devis{% endif %}
+        </h1>
+    </div>
+    <a class="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50" href="{{ url_for('dossiers.detail', dossier_id=dossier.id) }}">Retour dossier</a>
+</section>
+
+{% if devis_reference %}
+    <section class="mb-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+        <p class="font-black">Les lignes du devis v{{ devis_reference.version }} sont reprises pour modification.</p>
+        <p class="mt-1">Ajustez uniquement ce qui change, puis créez la nouvelle version pour accord client.</p>
+    </section>
+{% endif %}
+
+{% if is_sntl %}
+    <section class="mb-5 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950">
+        <p class="font-black">Client SNTL : les pièces sont considérées comme neuves.</p>
+        <p class="mt-1">Le choix neuf/occasion n'est donc pas affiché pour ce devis.</p>
+    </section>
+{% endif %}
+
+<form method="post" class="grid gap-6 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <label class="grid gap-2 text-sm font-bold text-slate-800">
+        Objet du devis
+        <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="objet" value="{% if devis_reference %}{{ devis_reference.objet }}{% else %}Devis {{ dossier.numero }}{% endif %}" required>
+    </label>
+
+    <section>
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h2 class="text-lg font-black text-slate-950">Lignes du devis</h2>
+            <div class="flex flex-wrap gap-2">
+                <button class="h-10 rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50" type="button" data-add-labor>Ajouter main d'oeuvre</button>
+                <button class="h-10 rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50" type="button" data-add-line>Ajouter une ligne</button>
+            </div>
+        </div>
+
+        <div class="mt-4 grid gap-3" data-lines>
+            {% if devis_reference and devis_reference.lignes %}
+                {% for ligne in devis_reference.lignes %}
+                    <div class="grid gap-3 rounded-md border border-slate-200 p-3 {% if is_sntl %}md:grid-cols-4{% else %}md:grid-cols-5{% endif %}">
+                        <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="designation" value="{{ ligne.designation }}" placeholder="Désignation">
+                        <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" type="number" step="0.01" name="quantite" value="{{ ligne.quantite }}" placeholder="Qté">
+                        <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" type="number" step="0.01" name="prix_unitaire_ht" value="{{ ligne.prix_unitaire_ht }}" placeholder="Prix HT">
+                        {% if not is_sntl %}
+                            <select class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="etat_piece">
+                                <option value="neuf" {% if ligne.etat_piece == 'neuf' %}selected{% endif %}>Neuf</option>
+                                <option value="occasion" {% if ligne.etat_piece == 'occasion' %}selected{% endif %}>Occasion</option>
+                            </select>
+                        {% endif %}
+                        <button class="h-11 rounded-md border border-red-200 bg-white px-3 text-sm font-black text-red-700" type="button" data-remove-line>Retirer</button>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="grid gap-3 rounded-md border border-slate-200 p-3 {% if is_sntl %}md:grid-cols-4{% else %}md:grid-cols-5{% endif %}">
+                    <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="designation" placeholder="Désignation">
+                    <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" type="number" step="0.01" name="quantite" value="1" placeholder="Qté">
+                    <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" type="number" step="0.01" name="prix_unitaire_ht" placeholder="Prix HT">
+                    {% if not is_sntl %}
+                        <select class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="etat_piece">
+                            <option value="neuf">Neuf</option>
+                            <option value="occasion">Occasion</option>
+                        </select>
+                    {% endif %}
+                    <button class="h-11 rounded-md border border-red-200 bg-white px-3 text-sm font-black text-red-700" type="button" data-remove-line>Retirer</button>
+                </div>
+            {% endif %}
+        </div>
+    </section>
+
+    <label class="grid gap-2 text-sm font-bold text-slate-800">
+        Notes
+        <textarea class="min-h-24 rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="notes">{% if devis_reference %}{{ devis_reference.notes or '' }}{% endif %}</textarea>
+    </label>
+
+    <div class="flex justify-end border-t border-slate-200 pt-5">
+        <button class="h-11 rounded-md bg-monster-jaune px-5 text-sm font-black text-black transition hover:bg-yellow-300 focus:outline-none focus:ring-4 focus:ring-yellow-200" type="submit">Créer et attendre l'accord</button>
+    </div>
+</form>
+
+<template data-line-template>
+    <div class="grid gap-3 rounded-md border border-slate-200 p-3 {% if is_sntl %}md:grid-cols-4{% else %}md:grid-cols-5{% endif %}">
+        <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="designation" placeholder="Désignation">
+        <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" type="number" step="0.01" name="quantite" value="1" placeholder="Qté">
+        <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" type="number" step="0.01" name="prix_unitaire_ht" placeholder="Prix HT">
+        {% if not is_sntl %}
+            <select class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="etat_piece">
+                <option value="neuf">Neuf</option>
+                <option value="occasion">Occasion</option>
+            </select>
+        {% endif %}
+        <button class="h-11 rounded-md border border-red-200 bg-white px-3 text-sm font-black text-red-700" type="button" data-remove-line>Retirer</button>
+    </div>
+</template>
+
+<script>
+    (() => {
+        const lines = document.querySelector("[data-lines]");
+        const template = document.querySelector("[data-line-template]");
+        const addButton = document.querySelector("[data-add-line]");
+        const addLaborButton = document.querySelector("[data-add-labor]");
+
+        const appendLine = ({ designation = "", quantite = "1", prix = "0" } = {}) => {
+            const line = template.content.firstElementChild.cloneNode(true);
+            line.querySelector('input[name="designation"]').value = designation;
+            line.querySelector('input[name="quantite"]').value = quantite;
+            line.querySelector('input[name="prix_unitaire_ht"]').value = prix;
+            const etatPiece = line.querySelector('select[name="etat_piece"]');
+            if (etatPiece) etatPiece.value = "neuf";
+            lines.append(line);
+        };
+
+        addButton?.addEventListener("click", () => {
+            appendLine();
+        });
+
+        addLaborButton?.addEventListener("click", () => {
+            const prix = window.prompt("Coût main d'oeuvre HT", "0");
+            if (prix === null) return;
+            appendLine({ designation: "Main d'oeuvre", quantite: "1", prix: prix || "0" });
+        });
+
+        lines?.addEventListener("click", (event) => {
+            if (!event.target.matches("[data-remove-line]")) return;
+            if (lines.children.length === 1) return;
+            event.target.closest("div").remove();
+        });
+    })();
+</script>
+{% endblock %}

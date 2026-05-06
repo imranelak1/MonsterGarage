@@ -1,0 +1,335 @@
+{% extends "base.html" %}
+
+{% block title %}Nouvelle prise en charge - Monster Garage{% endblock %}
+
+{% block content %}
+<section class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div>
+        <p class="text-sm font-semibold text-slate-500">Atelier</p>
+        <h1 class="mt-1 text-3xl font-black tracking-tight text-slate-950">Nouvelle prise en charge</h1>
+    </div>
+    <a class="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50" href="{{ url_for('dossiers.liste') }}">Retour</a>
+</section>
+
+<form method="post" class="grid gap-6 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <section>
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+                <h2 class="text-lg font-black text-slate-950">Client dans la prise en charge</h2>
+                <p class="mt-1 text-sm text-slate-500">Le ticket atelier crée aussi la fiche client si elle n'existe pas encore.</p>
+            </div>
+            <div class="flex rounded-md border border-slate-200 bg-slate-50 p-1 text-sm font-bold">
+                <label class="rounded px-3 py-2"><input class="mr-2" type="radio" name="mode_client" value="nouveau" checked> Nouveau</label>
+                <label class="rounded px-3 py-2"><input class="mr-2" type="radio" name="mode_client" value="existant"> Existant</label>
+            </div>
+        </div>
+
+        <div class="mt-4 grid gap-4 md:grid-cols-3" data-new-client>
+            <label class="grid gap-2 text-sm font-bold text-slate-800">
+                Nom client
+                <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="client_nom" placeholder="Nom ou organisme">
+            </label>
+            <label class="grid gap-2 text-sm font-bold text-slate-800">
+                Téléphone
+                <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="client_telephone">
+            </label>
+            <label class="grid gap-2 text-sm font-bold text-slate-800">
+                Type client
+                <select class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="client_type">
+                    <option value="particulier">Particulier</option>
+                    <option value="administration">Administration</option>
+                    <option value="sntl">Administration SNTL</option>
+                </select>
+            </label>
+            <label class="hidden grid gap-2 text-sm font-bold text-slate-800" data-sntl-preset>
+                Client SNTL / OR
+                <select class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="client_sntl_preset">
+                    {% for key, preset in sntl_presets.items() %}
+                        <option value="{{ key }}"
+                                data-code="{{ preset.code }}"
+                                data-nom="{{ preset.nom }}"
+                                data-or="{{ preset.or_numero }}">
+                            {{ preset.code }} - {{ preset.nom }} / OR {{ preset.or_numero }}
+                        </option>
+                    {% endfor %}
+                    <option value="custom">Nouveau client SNTL</option>
+                </select>
+            </label>
+            <label class="grid gap-2 text-sm font-bold text-slate-800">
+                Code client
+                <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="client_code" placeholder="Auto si vide">
+            </label>
+            <label class="grid gap-2 text-sm font-bold text-slate-800">
+                Email
+                <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" type="email" name="client_email">
+            </label>
+            <label class="hidden grid gap-2 text-sm font-bold text-slate-800" data-sntl-ice>
+                ICE client SNTL
+                <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="client_ice" placeholder="ICE de l'administration">
+            </label>
+            <label class="grid gap-2 text-sm font-bold text-slate-800">
+                Ville
+                <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="client_ville" value="Marrakech">
+            </label>
+            <label class="grid gap-2 text-sm font-bold text-slate-800 md:col-span-3">
+                Adresse
+                <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="client_adresse">
+            </label>
+        </div>
+
+        <div class="mt-4 grid gap-4 md:grid-cols-3" data-assurance-block>
+            <label class="grid gap-2 text-sm font-bold text-slate-800">
+                Assurance
+                <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="assurance_nom" placeholder="Ex : Wafa Assurance, AtlantaSanad...">
+            </label>
+            <p class="self-end text-xs font-semibold text-slate-500 md:col-span-2">Visible pour les clients particuliers afin de suivre l'assurance liée à cette prise en charge.</p>
+        </div>
+
+        <div class="mt-5 hidden rounded-md border border-slate-200 bg-slate-50 p-4" data-existing-client>
+            <label class="grid gap-2 text-sm font-bold text-slate-800">
+                Client déjà enregistré
+                <select class="h-11 rounded-md border border-slate-300 bg-white px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="client_id">
+                    <option value="">Sélectionner uniquement si vous cochez Existant</option>
+                    {% for client in clients %}
+                        <option value="{{ client.id }}" data-client-type="{{ client.type }}">{{ client.code }} - {{ client.nom }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+        </div>
+    </section>
+
+    <section class="border-t border-slate-200 pt-5">
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+                <h2 class="text-lg font-black text-slate-950">Véhicule dans la prise en charge</h2>
+                <p class="mt-1 text-sm text-slate-500">Le véhicule est créé avec le ticket si besoin.</p>
+            </div>
+            <div class="flex rounded-md border border-slate-200 bg-slate-50 p-1 text-sm font-bold">
+                <label class="rounded px-3 py-2"><input class="mr-2" type="radio" name="mode_vehicule" value="nouveau" checked> Nouveau</label>
+                <label class="rounded px-3 py-2"><input class="mr-2" type="radio" name="mode_vehicule" value="existant"> Existant</label>
+            </div>
+        </div>
+
+        <div class="mt-4 grid gap-4 md:grid-cols-3" data-new-vehicule>
+            <label class="grid gap-2 text-sm font-bold text-slate-800">
+                Immatriculation
+                <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="vehicule_immatriculation">
+            </label>
+            <label class="grid gap-2 text-sm font-bold text-slate-800">
+                Marque
+                <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="vehicule_marque">
+            </label>
+            <label class="grid gap-2 text-sm font-bold text-slate-800">
+                Modèle
+                <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="vehicule_modele">
+            </label>
+            <label class="grid gap-2 text-sm font-bold text-slate-800">
+                Type véhicule
+                <select class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="vehicule_type">
+                    <option value="voiture">Voiture</option>
+                    <option value="utilitaire">Utilitaire</option>
+                    <option value="camion">Camion</option>
+                    <option value="moto">Moto</option>
+                    <option value="engin">Engin</option>
+                    <option value="bateau">Bateau</option>
+                </select>
+            </label>
+            <label class="grid gap-2 text-sm font-bold text-slate-800">
+                Carburant
+                <select class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="vehicule_carburant">
+                    <option value="">Non précisé</option>
+                    <option value="essence">Essence</option>
+                    <option value="diesel">Diesel</option>
+                    <option value="electrique">Électrique</option>
+                    <option value="hybride">Hybride</option>
+                </select>
+            </label>
+            <label class="grid gap-2 text-sm font-bold text-slate-800">
+                Type immatriculation
+                <select class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="vehicule_type_immatriculation">
+                    <option value="standard">Standard</option>
+                    <option value="administrative">Administrative</option>
+                    <option value="ww">WW</option>
+                    <option value="etranger">Étranger</option>
+                </select>
+            </label>
+        </div>
+
+        <div class="mt-5 hidden rounded-md border border-slate-200 bg-slate-50 p-4" data-existing-vehicule>
+            <label class="grid gap-2 text-sm font-bold text-slate-800">
+                Véhicule déjà enregistré
+                <select class="h-11 rounded-md border border-slate-300 bg-white px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100 disabled:bg-slate-100 disabled:text-slate-400" name="vehicule_id" disabled>
+                    <option value="">Sélectionnez d'abord un client existant</option>
+                    {% for vehicule in vehicules %}
+                        <option value="{{ vehicule.id }}" data-client-id="{{ vehicule.client_id }}">{{ vehicule.immatriculation }} - {{ vehicule.marque }} {{ vehicule.modele }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <p class="mt-2 text-xs font-semibold text-slate-500" data-vehicle-filter-hint>Sélectionnez un client existant pour afficher uniquement ses véhicules.</p>
+        </div>
+    </section>
+
+    <section class="border-t border-slate-200 pt-5">
+        <h2 class="text-lg font-black text-slate-950">Demande atelier</h2>
+        <div class="mt-4 grid gap-4">
+            <label class="grid gap-2 text-sm font-bold text-slate-800">
+                Demande client / panne constatée
+                <textarea class="min-h-28 rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="demande_client" required></textarea>
+            </label>
+            <label class="grid gap-2 text-sm font-bold text-slate-800">
+                Diagnostic initial
+                <textarea class="min-h-24 rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="diagnostic_initial"></textarea>
+            </label>
+            <label class="grid gap-2 text-sm font-bold text-slate-800">
+                Kilométrage entrée
+                <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" type="number" name="kilometrage_entree">
+            </label>
+            <label class="grid gap-2 text-sm font-bold text-slate-800">
+                Notes internes
+                <textarea class="min-h-20 rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="notes"></textarea>
+            </label>
+        </div>
+    </section>
+
+    <div class="flex justify-end border-t border-slate-200 pt-5">
+        <button class="h-11 rounded-md bg-monster-jaune px-5 text-sm font-black text-black transition hover:bg-yellow-300 focus:outline-none focus:ring-4 focus:ring-yellow-200" type="submit">Créer le dossier</button>
+    </div>
+</form>
+
+<script>
+    (() => {
+        const checkedValue = (name) => document.querySelector(`input[name="${name}"]:checked`)?.value;
+
+        const toggle = (name, selector, visibleValue = "existant") => {
+            const radios = document.querySelectorAll(`input[name="${name}"]`);
+            const target = document.querySelector(selector);
+            const update = () => {
+                target?.classList.toggle("hidden", checkedValue(name) !== visibleValue);
+            };
+            radios.forEach((radio) => radio.addEventListener("change", update));
+            update();
+        };
+
+        const clientSelect = document.querySelector('select[name="client_id"]');
+        const clientTypeSelect = document.querySelector('select[name="client_type"]');
+        const sntlPresetBlock = document.querySelector("[data-sntl-preset]");
+        const sntlIceBlock = document.querySelector("[data-sntl-ice]");
+        const sntlPresetSelect = document.querySelector('select[name="client_sntl_preset"]');
+        const clientCodeInput = document.querySelector('input[name="client_code"]');
+        const clientNameInput = document.querySelector('input[name="client_nom"]');
+        const vehiculeSelect = document.querySelector('select[name="vehicule_id"]');
+        const immatriculationTypeSelect = document.querySelector('select[name="vehicule_type_immatriculation"]');
+        const vehiculeExistantRadio = document.querySelector('input[name="mode_vehicule"][value="existant"]');
+        const vehiculeNouveauRadio = document.querySelector('input[name="mode_vehicule"][value="nouveau"]');
+        const vehicleHint = document.querySelector("[data-vehicle-filter-hint]");
+        const assuranceBlock = document.querySelector("[data-assurance-block]");
+
+        const selectedClientType = () => {
+            if (checkedValue("mode_client") === "existant") {
+                return clientSelect?.selectedOptions[0]?.dataset.clientType || "";
+            }
+            return clientTypeSelect?.value || "particulier";
+        };
+
+        const updateClientDependentFields = () => {
+            const typeClient = selectedClientType();
+            assuranceBlock?.classList.toggle("hidden", typeClient !== "particulier");
+            sntlPresetBlock?.classList.toggle("hidden", checkedValue("mode_client") !== "nouveau" || typeClient !== "sntl");
+            sntlIceBlock?.classList.toggle("hidden", checkedValue("mode_client") !== "nouveau" || typeClient !== "sntl");
+            if (typeClient === "sntl") {
+                applySntlPreset();
+            } else {
+                if (clientCodeInput) clientCodeInput.readOnly = false;
+                if (clientNameInput) clientNameInput.readOnly = false;
+            }
+            if (typeClient === "sntl" && checkedValue("mode_vehicule") === "nouveau" && immatriculationTypeSelect) {
+                immatriculationTypeSelect.value = "administrative";
+            }
+        };
+
+        const applySntlPreset = () => {
+            if (checkedValue("mode_client") !== "nouveau" || clientTypeSelect?.value !== "sntl") return;
+            const selected = sntlPresetSelect?.selectedOptions[0];
+            const isCustom = !selected || selected.value === "custom";
+            if (clientCodeInput) {
+                clientCodeInput.readOnly = !isCustom;
+                clientCodeInput.value = isCustom ? clientCodeInput.value : selected.dataset.code || "";
+            }
+            if (clientNameInput) {
+                clientNameInput.readOnly = !isCustom;
+                clientNameInput.value = isCustom ? clientNameInput.value : selected.dataset.nom || "";
+            }
+        };
+
+        const updateVehicleChoices = () => {
+            updateClientDependentFields();
+            const clientIsExisting = checkedValue("mode_client") === "existant";
+            const selectedClientId = clientIsExisting ? clientSelect?.value : "";
+
+            if (vehiculeExistantRadio) {
+                vehiculeExistantRadio.disabled = !clientIsExisting;
+                if (!clientIsExisting && vehiculeExistantRadio.checked) {
+                    vehiculeNouveauRadio.checked = true;
+                }
+            }
+
+            const vehicleOptions = [...(vehiculeSelect?.options || [])].filter((option) => option.value);
+            let availableCount = 0;
+            vehicleOptions.forEach((option) => {
+                const visible = Boolean(selectedClientId) && option.dataset.clientId === selectedClientId;
+                option.hidden = !visible;
+                option.disabled = !visible;
+                if (visible) availableCount += 1;
+            });
+
+            if (vehiculeSelect?.selectedOptions[0]?.disabled) {
+                vehiculeSelect.value = "";
+            }
+
+            if (vehiculeSelect) {
+                const placeholder = vehiculeSelect.options[0];
+                if (!selectedClientId) {
+                    placeholder.textContent = "Sélectionnez d'abord un client existant";
+                    vehiculeSelect.disabled = true;
+                } else if (!availableCount) {
+                    placeholder.textContent = "Aucun véhicule enregistré pour ce client";
+                    vehiculeSelect.disabled = true;
+                    if (checkedValue("mode_vehicule") === "existant") {
+                        vehiculeNouveauRadio.checked = true;
+                    }
+                } else {
+                    placeholder.textContent = "Sélectionner un véhicule du client";
+                    vehiculeSelect.disabled = checkedValue("mode_vehicule") !== "existant";
+                }
+            }
+
+            if (vehicleHint) {
+                if (!selectedClientId) {
+                    vehicleHint.textContent = "Sélectionnez un client existant pour afficher uniquement ses véhicules.";
+                } else if (!availableCount) {
+                    vehicleHint.textContent = "Ce client n'a pas encore de véhicule enregistré : créez un nouveau véhicule, il sera rattaché à ce client.";
+                } else {
+                    vehicleHint.textContent = `${availableCount} véhicule(s) trouvé(s) pour ce client.`;
+                }
+            }
+
+            document.querySelector("[data-existing-vehicule]")?.classList.toggle("hidden", checkedValue("mode_vehicule") !== "existant");
+            document.querySelector("[data-new-vehicule]")?.classList.toggle("hidden", checkedValue("mode_vehicule") !== "nouveau");
+            updateClientDependentFields();
+        };
+
+        toggle("mode_client", "[data-existing-client]");
+        toggle("mode_client", "[data-new-client]", "nouveau");
+        toggle("mode_vehicule", "[data-existing-vehicule]");
+        toggle("mode_vehicule", "[data-new-vehicule]", "nouveau");
+
+        document.querySelectorAll('input[name="mode_client"], input[name="mode_vehicule"]').forEach((input) => {
+            input.addEventListener("change", updateVehicleChoices);
+        });
+        clientSelect?.addEventListener("change", updateVehicleChoices);
+        clientTypeSelect?.addEventListener("change", updateClientDependentFields);
+        sntlPresetSelect?.addEventListener("change", applySntlPreset);
+        updateVehicleChoices();
+    })();
+</script>
+{% endblock %}

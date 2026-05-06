@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}Employés - Monster Garage{% endblock %}
+
+{% block content %}
+<section class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div>
+        <p class="text-sm font-semibold text-slate-500">Ressources Humaines</p>
+        <h1 class="mt-1 text-3xl font-black tracking-tight text-slate-950">Employés</h1>
+    </div>
+    <div class="flex items-center gap-2">
+        <a class="inline-flex h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50"
+           href="{{ url_for('rh.vue_mensuelle') }}">← Livre de paie</a>
+        <a class="inline-flex h-10 items-center justify-center rounded-md bg-monster-jaune px-4 text-sm font-black text-black transition hover:bg-yellow-300"
+           href="{{ url_for('rh.nouvel_employe') }}">+ Nouvel employé</a>
+    </div>
+</section>
+
+<section class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+    <div class="grid grid-cols-[1fr_160px_160px_140px_80px] gap-4 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-wide text-slate-500">
+        <span>Employé</span>
+        <span>Fonction</span>
+        <span>Rémunération</span>
+        <span class="text-right">Salaire quinzaine</span>
+        <span></span>
+    </div>
+    <div class="divide-y divide-slate-100">
+        {% for emp in employes %}
+        <div class="grid grid-cols-[1fr_160px_160px_140px_80px] items-center gap-4 px-4 py-3 text-sm {% if not emp.actif %}opacity-50{% endif %}">
+            <div>
+                <a class="font-black text-slate-950 hover:text-yellow-600"
+                   href="{{ url_for('rh.fiche_employe', employe_id=emp.id) }}">
+                    {{ emp.nom_complet }}
+                </a>
+                {% if not emp.actif %}
+                <span class="ml-2 text-[10px] font-black uppercase text-slate-400">Inactif</span>
+                {% endif %}
+                {% if emp.cin %}
+                <p class="text-xs text-slate-400">CIN {{ emp.cin }}</p>
+                {% endif %}
+            </div>
+            <span class="text-slate-600">{{ emp.fonction_libelle }}</span>
+            <span class="text-slate-600">{{ emp.type_remuneration_libelle }}</span>
+            <span class="text-right font-semibold text-slate-800">
+                {% if emp.salaire_quinzaine %}
+                    {{ "%.2f"|format(emp.salaire_quinzaine) }} DH
+                {% else %}
+                    <span class="text-slate-400">—</span>
+                {% endif %}
+            </span>
+            <div class="flex justify-end">
+                <a class="text-xs font-black uppercase text-slate-400 hover:text-yellow-600"
+                   href="{{ url_for('rh.modifier_employe', employe_id=emp.id) }}">Modifier</a>
+            </div>
+        </div>
+        {% else %}
+        <p class="px-4 py-10 text-center text-sm font-semibold text-slate-400">
+            Aucun employé. <a class="text-yellow-600 hover:underline" href="{{ url_for('rh.nouvel_employe') }}">Ajouter le premier</a>.
+        </p>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Import Excel - Monster Garage{% endblock %}
+
+{% block content %}
+<section class="mb-6">
+    <p class="text-sm font-semibold text-slate-500">
+        <a class="hover:text-yellow-600" href="{{ url_for('rh.vue_mensuelle') }}">Livre de paie</a>
+        <span class="mx-1">›</span> Import Excel
+    </p>
+    <h1 class="mt-1 text-3xl font-black tracking-tight text-slate-950">Importer un livre de caisse</h1>
+    <p class="mt-1 text-sm text-slate-500">Format attendu : feuille <strong>SALAIRES</strong> du fichier mensuel Monster Garage.</p>
+</section>
+
+<div class="mx-auto max-w-xl">
+    <form method="post" action="{{ url_for('rh.import_excel') }}" enctype="multipart/form-data"
+          class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm grid gap-5">
+
+        <div class="grid gap-1.5">
+            <label class="text-sm font-black text-slate-700" for="fichier">
+                Fichier Excel <span class="text-red-500">*</span>
+            </label>
+            <input type="file" id="fichier" name="fichier" accept=".xlsx" required
+                   class="block w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm text-slate-700
+                          file:mr-3 file:rounded-md file:border-0 file:bg-monster-jaune file:px-3 file:py-1.5
+                          file:text-xs file:font-black file:text-black hover:file:bg-yellow-300">
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+            <div class="grid gap-1.5">
+                <label class="text-sm font-black text-slate-700" for="mois">Mois <span class="text-red-500">*</span></label>
+                <select id="mois" name="mois" required
+                        class="h-11 rounded-md border border-slate-300 px-3 focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100 outline-none">
+                    {% for m, label in [(1,'Janvier'),(2,'Février'),(3,'Mars'),(4,'Avril'),(5,'Mai'),(6,'Juin'),
+                                        (7,'Juillet'),(8,'Août'),(9,'Septembre'),(10,'Octobre'),(11,'Novembre'),(12,'Décembre')] %}
+                    <option value="{{ m }}" {% if m == today_mois %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="grid gap-1.5">
+                <label class="text-sm font-black text-slate-700" for="annee">Année <span class="text-red-500">*</span></label>
+                <input type="number" id="annee" name="annee" required
+                       value="{{ today_annee }}" min="2020" max="2099"
+                       class="h-11 rounded-md border border-slate-300 px-3 focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100 outline-none">
+            </div>
+        </div>
+
+        <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <strong>Avant d'importer :</strong>
+            <ul class="mt-1 list-inside list-disc space-y-1 text-amber-700">
+                <li>Les données existantes pour ce mois <strong>ne seront pas écrasées</strong> — les doublons sont ignorés.</li>
+                <li>Les employés non trouvés seront <strong>créés automatiquement</strong>.</li>
+                <li>Vérifiez le mois et l'année avant de valider.</li>
+            </ul>
+        </div>
+
+        <div class="flex justify-end gap-3 pt-1">
+            <a class="inline-flex h-11 items-center justify-center rounded-md border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 hover:bg-slate-50"
+               href="{{ url_for('rh.vue_mensuelle') }}">Annuler</a>
+            <button class="inline-flex h-11 items-center justify-center rounded-md bg-monster-jaune px-6 text-sm font-black text-black hover:bg-yellow-300"
+                    type="submit">Importer</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

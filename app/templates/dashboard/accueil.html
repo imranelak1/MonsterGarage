@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+
+{% block title %}Tableau de bord - Monster Garage{% endblock %}
+
+{% block content %}
+<section class="grid gap-6">
+    <section class="mg-hero">
+        <div class="mg-hero-noise"></div>
+        <div class="pointer-events-none absolute -right-12 top-5 hidden text-[14rem] font-black leading-none text-white/[0.04] xl:block">MG</div>
+
+        <div class="relative z-10 grid gap-7 xl:grid-cols-[1fr_360px] xl:items-center">
+            <div class="max-w-2xl">
+                <div class="mb-5 inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/5 px-3.5 py-2">
+                    <span class="h-2 w-2 rounded-full bg-monster-jaune"></span>
+                    <span class="text-[9px] font-black uppercase tracking-[0.2em] text-slate-300">Terminal d'entrée atelier</span>
+                </div>
+
+                <h1 class="text-4xl font-black leading-[0.96] tracking-tight text-white sm:text-5xl xl:text-6xl">
+                    Démarrer un<br>
+                    nouveau<br>
+                    <span class="text-monster-jaune">dossier atelier</span>
+                </h1>
+
+                <div class="mt-6 grid gap-1.5 text-sm font-medium leading-6 text-slate-300 sm:text-base">
+                    <p>Initialisez une prise en charge véhicule, créez le client et la voiture, puis démarrez le devis initial.</p>
+                    <p>Le flux reste contrôlé : aucun travail sans accord client ou assurance si nécessaire.</p>
+                </div>
+
+                <div class="mt-7 flex flex-col gap-3 sm:flex-row">
+                    <a class="mg-btn-primary" href="{{ url_for('dossiers.nouveau') }}">Nouveau dossier</a>
+                    <a class="mg-btn-secondary" href="{{ url_for('dossiers.liste') }}">Historique</a>
+                </div>
+            </div>
+
+            <aside class="rounded-[1.5rem] border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-black/25">
+                <div class="flex items-center gap-4">
+                    <div class="grid h-14 w-14 place-items-center rounded-2xl bg-monster-jaune text-lg font-black text-black shadow-lg shadow-yellow-300/30">AT</div>
+                    <div>
+                        <p class="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">Dernière entrée</p>
+                        <h2 class="mt-1 text-xl font-black tracking-tight text-white">
+                            {% if dernier_dossier %}{{ dernier_dossier.numero }}{% else %}Aucun dossier{% endif %}
+                        </h2>
+                    </div>
+                </div>
+
+                {% if dernier_dossier %}
+                    {% set progression = progressions.get(dernier_dossier.statut, 0) %}
+                    <div class="mt-6">
+                        <div class="mb-3 flex items-end justify-between gap-4">
+                            <div>
+                                <p class="text-base font-black text-white">{{ dernier_dossier.vehicule.marque }} {{ dernier_dossier.vehicule.modele }}</p>
+                                <p class="text-sm font-semibold text-slate-500">{{ dernier_dossier.client.nom }}</p>
+                            </div>
+                            <span class="text-sm font-black text-monster-jaune">{{ progression }}%</span>
+                        </div>
+                        <div class="h-2 overflow-hidden rounded-full bg-white/10">
+                            <div class="h-full rounded-full bg-monster-jaune shadow-[0_0_16px_rgba(255,216,0,0.45)]" style="width: {{ progression }}%"></div>
+                        </div>
+                    </div>
+
+                    <a class="mt-6 flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 p-4 transition hover:bg-white/10" href="{{ url_for('dossiers.detail', dossier_id=dernier_dossier.id) }}">
+                        <div>
+                            <p class="text-sm font-black text-white">{{ dernier_dossier.statut_libelle }}</p>
+                            <p class="mt-1 line-clamp-2 text-xs font-medium leading-5 text-slate-500">{{ dernier_dossier.demande_client }}</p>
+                        </div>
+                        <span class="grid h-10 w-10 place-items-center rounded-xl bg-white/10 text-sm font-black text-monster-jaune">GO</span>
+                    </a>
+                {% else %}
+                    <div class="mt-6 rounded-2xl border border-dashed border-white/15 p-4 text-sm leading-6 text-slate-400">
+                        Aucun dossier atelier pour le moment. Le premier dossier créera la première carte de flux.
+                    </div>
+                {% endif %}
+            </aside>
+        </div>
+    </section>
+
+    <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {% for indicateur in indicateurs %}
+            <article class="mg-card p-4">
+                <p class="text-sm font-bold text-slate-500">{{ indicateur.libelle }}</p>
+                <strong class="mt-1.5 block text-2xl font-black tracking-tight text-slate-950">{{ indicateur.valeur }}</strong>
+                <p class="mt-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">{{ indicateur.detail }}</p>
+            </article>
+        {% endfor %}
+    </section>
+
+    <section>
+        <div class="mb-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div class="flex items-center gap-3">
+                <div class="grid h-10 w-10 place-items-center rounded-xl bg-black text-xs font-black text-monster-jaune shadow-lg shadow-black/20">FL</div>
+                <div>
+                    <h2 class="text-xl font-black uppercase tracking-tight text-black">Flux atelier en temps réel</h2>
+                    <p class="mt-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Surveillance active des dossiers de réparation</p>
+                </div>
+            </div>
+            <a class="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-[10px] font-black uppercase tracking-[0.14em] text-slate-700 shadow-sm transition hover:border-slate-300 hover:text-black" href="{{ url_for('dossiers.liste') }}">Tous les dossiers</a>
+        </div>
+
+        <div class="grid gap-5 xl:grid-cols-3">
+            {% for colonne in colonnes %}
+                <section class="grid content-start gap-4">
+                    <div class="flex items-center justify-between border-b-2 pb-3 {% if colonne.couleur == 'yellow' %}border-monster-jaune{% elif colonne.couleur == 'green' %}border-emerald-500{% else %}border-slate-200{% endif %}">
+                        <div>
+                            <h3 class="text-[10px] font-black uppercase tracking-[0.2em] text-black">{{ colonne.titre }}</h3>
+                            <p class="mt-1 text-xs font-semibold text-slate-500">{{ colonne.sous_titre }}</p>
+                        </div>
+                        <span class="rounded-lg px-3 py-1 text-xs font-black {% if colonne.couleur == 'yellow' %}bg-monster-jaune text-black{% elif colonne.couleur == 'green' %}bg-emerald-500 text-white{% else %}bg-slate-100 text-slate-600{% endif %}">
+                            {{ colonne.dossiers|length }}
+                        </span>
+                    </div>
+
+                    {% for dossier in colonne.dossiers %}
+                        {% set progression = progressions.get(dossier.statut, 0) %}
+                        <a class="mg-flow-card {% if dossier.statut in ['in_progress', 'paused_pending_approval'] %}border-l-[6px] border-l-monster-jaune{% elif dossier.statut == 'completed' %}border-emerald-100{% endif %}" href="{{ url_for('dossiers.detail', dossier_id=dossier.id) }}">
+                            <div class="mb-4 flex items-start justify-between gap-4">
+                                <span class="mg-status-tag {{ badges.get(dossier.statut, 'bg-slate-100 text-slate-700') }}">{{ dossier.statut_libelle }}</span>
+                                <span class="font-mono text-xs font-black text-slate-300">#{{ dossier.numero }}</span>
+                            </div>
+
+                            <h4 class="text-lg font-black tracking-tight text-black">{{ dossier.vehicule.marque }} {{ dossier.vehicule.modele }}</h4>
+                            <p class="mt-1 text-sm font-semibold text-slate-500">{{ dossier.client.nom }} - {{ dossier.demande_client }}</p>
+
+                            {% if dossier.statut in ['in_progress', 'paused_pending_approval', 'completed'] %}
+                                <div class="mt-5">
+                                    <div class="mb-2 flex justify-between text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
+                                        <span>Progression</span>
+                                        <span class="{% if dossier.statut == 'completed' %}text-emerald-600{% else %}text-monster-jaune{% endif %}">{{ progression }}%</span>
+                                    </div>
+                                    <div class="h-2 overflow-hidden rounded-full border border-slate-100 bg-slate-50">
+                                        <div class="h-full rounded-full {% if dossier.statut == 'completed' %}bg-emerald-500{% else %}bg-monster-jaune{% endif %}" style="width: {{ progression }}%"></div>
+                                    </div>
+                                </div>
+                            {% endif %}
+
+                            <div class="mt-5 flex items-center justify-between border-t border-slate-100 pt-3">
+                                <div class="flex items-center gap-3">
+                                    <div class="grid h-9 w-9 place-items-center rounded-full border border-slate-200 bg-slate-50 text-[10px] font-black text-slate-400">MG</div>
+                                    <span class="text-xs font-bold text-slate-500">{{ dossier.created_by.nom_complet }}</span>
+                                </div>
+                                <span class="rounded-lg bg-orange-50 px-2.5 py-1.5 text-[10px] font-black text-orange-600">{{ dossier.updated_at.strftime("%d/%m %H:%M") }}</span>
+                            </div>
+                        </a>
+                    {% else %}
+                        <a class="grid min-h-40 place-items-center rounded-[1.5rem] border-2 border-dashed border-slate-200 bg-white/60 p-6 text-center transition hover:border-slate-300 hover:bg-white" href="{{ url_for('dossiers.nouveau') }}">
+                            <div>
+                                <div class="mx-auto grid h-12 w-12 place-items-center rounded-full border border-slate-200 bg-slate-50 text-xl font-black text-slate-300">+</div>
+                                <p class="mt-4 text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Zone disponible</p>
+                            </div>
+                        </a>
+                    {% endfor %}
+                </section>
+            {% endfor %}
+        </div>
+    </section>
+</section>
+{% endblock %}

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}Paramètres système - Monster Garage{% endblock %}
+
+{% block content %}
+<section class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div>
+        <p class="text-sm font-semibold text-slate-500">Paramètres</p>
+        <h1 class="mt-1 text-3xl font-black tracking-tight text-slate-950">Système</h1>
+    </div>
+    <a class="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50" href="{{ url_for('parametres.entreprise') }}">Entreprise</a>
+</section>
+
+<form method="post" class="rounded-lg border border-slate-200 bg-white shadow-sm">
+    <div class="grid border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-wide text-slate-500 md:grid-cols-[1fr_180px_160px]">
+        <span>Paramètre</span>
+        <span class="hidden md:block">Valeur</span>
+        <span class="hidden md:block">Type</span>
+    </div>
+
+    <div class="divide-y divide-slate-200">
+        {% for parametre in parametres %}
+            <label class="grid gap-3 px-4 py-4 md:grid-cols-[1fr_180px_160px] md:items-center">
+                <span>
+                    <strong class="block text-sm font-black text-slate-900">{{ parametre.cle }}</strong>
+                    <span class="mt-1 block text-sm text-slate-500">{{ parametre.description }}</span>
+                </span>
+                <input class="h-10 rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="{{ parametre.cle }}" value="{{ parametre.valeur or '' }}">
+                <span class="text-sm font-semibold text-slate-500">{{ parametre.type_valeur }}</span>
+            </label>
+        {% endfor %}
+    </div>
+
+    <div class="flex justify-end border-t border-slate-200 px-4 py-4">
+        <button class="h-11 rounded-md bg-monster-jaune px-5 text-sm font-black text-black transition hover:bg-yellow-300 focus:outline-none focus:ring-4 focus:ring-yellow-200" type="submit">Enregistrer</button>
+    </div>
+</form>
+{% endblock %}

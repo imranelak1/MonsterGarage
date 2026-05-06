@@ -1,0 +1,20 @@
+{
+  "name": "monster-garage-erp",
+  "version": "1.0.0",
+  "description": "Application web locale pour la gestion de Monster Garage / WIDINE MOTORS SERVICES à Marrakech.",
+  "main": "tailwind.config.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "css:build": "tailwindcss -i ./input.css -o ./app/static/css/tailwind.css",
+    "css:watch": "tailwindcss -i ./input.css -o ./app/static/css/tailwind.css --watch"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "tailwindcss": "^3.4.17"
+  }
+}

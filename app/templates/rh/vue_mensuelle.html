@@ -1,0 +1,614 @@
+{% extends "base.html" %}
+
+{% block title %}Salaires {{ mois }}/{{ annee }} - Monster Garage{% endblock %}
+
+{% block content %}
+
+{# ── En-tête ─────────────────────────────────────────────────────────────── #}
+<section class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div>
+        <p class="text-sm font-semibold text-slate-500">Ressources Humaines</p>
+        <h1 class="mt-1 text-3xl font-black tracking-tight text-slate-950">Livre de paie</h1>
+    </div>
+    <div class="flex items-center gap-2">
+        <a class="inline-flex h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50"
+           href="{{ url_for('rh.liste_employes') }}">Employés</a>
+        <a class="inline-flex h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50"
+           href="{{ url_for('rh.import_excel') }}">↑ Import Excel</a>
+        <a class="inline-flex h-10 items-center justify-center rounded-md bg-monster-jaune px-4 text-sm font-black text-black transition hover:bg-yellow-300"
+           href="{{ url_for('rh.nouvel_employe') }}">+ Employé</a>
+    </div>
+</section>
+
+{# ── Sélecteur de mois ───────────────────────────────────────────────────── #}
+<section class="mb-5 flex items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
+    <a class="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-50"
+       href="{{ url_for('rh.vue_mensuelle', annee=mois_precedent[1], mois=mois_precedent[0]) }}">&#8592;</a>
+
+    <div class="text-center">
+        <p class="text-lg font-black text-slate-950">
+            {{ ['','Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'][mois] }}
+            {{ annee }}
+        </p>
+        {% if not mois_courant %}
+        <a class="text-xs font-semibold text-yellow-600 hover:underline"
+           href="{{ url_for('rh.vue_mensuelle') }}">← Mois courant</a>
+        {% endif %}
+    </div>
+
+    <a class="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-50"
+       href="{{ url_for('rh.vue_mensuelle', annee=mois_suivant[1], mois=mois_suivant[0]) }}">&#8594;</a>
+</section>
+
+{# ── Alertes ─────────────────────────────────────────────────────────────── #}
+{% if alertes %}
+<section class="mb-5 grid gap-2">
+    {% for alerte in alertes %}
+    <div class="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm">
+        <span class="text-base">⚠️</span>
+        <span class="font-semibold text-red-800">{{ alerte.message }}</span>
+    </div>
+    {% endfor %}
+</section>
+{% endif %}
+
+{# ── Actions globales ────────────────────────────────────────────────────── #}
+<section class="mb-5 flex flex-wrap gap-3">
+    <button class="rh-action-btn"
+            type="button" data-modal-open="modal-quinzaine">
+        Enregistrer quinzaine
+    </button>
+
+    <button class="rh-action-btn"
+            type="button" data-modal-open="modal-soldes">
+        Calculer soldes
+    </button>
+
+    <button class="rh-action-btn"
+            type="button" data-modal-open="modal-avance">
+        + Opération RH
+    </button>
+
+    <a class="inline-flex h-10 items-center gap-2 rounded-md border border-emerald-300 bg-emerald-50 px-4 text-sm font-black text-emerald-700 shadow-sm transition hover:bg-emerald-100"
+       href="{{ url_for('rh.export_xlsx', annee=annee, mois=mois) }}">
+        ↓ Export Excel
+    </a>
+</section>
+
+{# ── Modal : confirmation quinzaine ───────────────────────────────────── #}
+<div id="modal-quinzaine" class="rh-modal" role="dialog" aria-modal="true">
+    <div id="modal-quinzaine-panel" class="rh-modal-panel rh-modal-panel-sm">
+        <div class="rh-modal-header">
+            <div>
+                <p class="text-[10px] font-black uppercase tracking-widest text-slate-400">Paiement du 15</p>
+                <h2 class="mt-0.5 text-xl font-black text-slate-950">Enregistrer la quinzaine</h2>
+            </div>
+            <button class="rh-modal-close" type="button" data-modal-close="modal-quinzaine">✕</button>
+        </div>
+        <form method="post" action="{{ url_for('rh.payer_quinzaine', annee=annee, mois=mois) }}" class="contents">
+            <div class="rh-modal-body grid gap-5">
+            <div class="rh-dialog-note-warning">
+                Cette action crée le paiement de quinzaine pour les employés actifs à salaire fixe ou mixte.
+                Les employés déjà payés pour {{ mois }}/{{ annee }} seront ignorés.
+            </div>
+            <div class="grid gap-2 text-sm text-slate-600">
+                <div class="flex justify-between gap-4">
+                    <span>Période</span>
+                    <span class="font-black text-slate-900">15/{{ "%02d"|format(mois) }}/{{ annee }}</span>
+                </div>
+                <div class="flex justify-between gap-4">
+                    <span>Base de calcul</span>
+                    <span class="font-black text-slate-900">Salaire quinzaine</span>
+                </div>
+            </div>
+            </div>
+            <div class="rh-modal-footer">
+                <button class="rh-action-btn-muted" type="button" data-modal-close="modal-quinzaine">Annuler</button>
+                <button class="rh-action-btn-primary" type="submit">Confirmer</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{# ── Tableau mensuel ─────────────────────────────────────────────────────── #}
+<section class="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
+    <table class="w-full min-w-[900px] text-sm">
+        <thead>
+            <tr class="border-b border-slate-200 bg-slate-50 text-xs font-black uppercase tracking-wide text-slate-500">
+                <th class="px-4 py-3 text-left">Employé</th>
+                <th class="px-4 py-3 text-left">Fonction</th>
+                <th class="px-3 py-3 text-right">Avances</th>
+                <th class="px-3 py-3 text-right">Primes / Tâches</th>
+                <th class="px-3 py-3 text-right">Quinzaine</th>
+                <th class="px-3 py-3 text-right">Solde net</th>
+                <th class="px-3 py-3 text-right font-black text-slate-700">Net salaire</th>
+                <th class="px-4 py-3 text-center">Statut</th>
+                <th class="px-4 py-3"></th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+            {% for ligne in lignes %}
+            {% set emp = ligne.employe %}
+            <tr class="transition hover:bg-yellow-50 {% if 'solde_fin_mois_non_paye' in ligne.alertes %}bg-red-50/40{% endif %}">
+                <td class="px-4 py-3">
+                    <a class="font-black text-slate-950 hover:text-yellow-600"
+                       href="{{ url_for('rh.fiche_employe', employe_id=emp.id, mois=mois, annee=annee) }}">
+                        {{ emp.nom_complet }}
+                    </a>
+                    {% if ligne.reste_du %}
+                    <span class="ml-1 inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-black uppercase text-orange-700">
+                        Reste {{ ligne.reste_du|int }} DH
+                    </span>
+                    {% endif %}
+                </td>
+                <td class="px-4 py-3 text-slate-500">{{ emp.fonction_libelle }}</td>
+
+                <td class="px-3 py-3 text-right text-slate-700">
+                    {% if ligne.total_avances %}
+                        <span class="font-semibold text-red-600">{{ "%.2f"|format(ligne.total_avances) }}</span>
+                    {% else %}—{% endif %}
+                </td>
+
+                <td class="px-3 py-3 text-right text-slate-700">
+                    {% if ligne.total_primes %}
+                        <span class="font-semibold text-blue-600">{{ "%.2f"|format(ligne.total_primes) }}</span>
+                    {% else %}—{% endif %}
+                </td>
+
+                <td class="px-3 py-3 text-right">
+                    {% if ligne.quinzaine %}
+                        {{ "%.2f"|format(ligne.quinzaine.montant_net_paye) }}
+                    {% elif emp.type_remuneration == 'tache' %}
+                        <span class="text-slate-400 text-xs">N/A</span>
+                    {% else %}
+                        <span class="text-amber-500 text-xs font-semibold">—</span>
+                    {% endif %}
+                </td>
+
+                <td class="px-3 py-3 text-right font-semibold">
+                    {% if ligne.solde %}
+                        {{ "%.2f"|format(ligne.solde.montant_net_paye) }}
+                        {% if ligne.solde.est_prorata %}
+                        <span class="ml-1 text-[10px] font-black uppercase text-slate-400">prorata</span>
+                        {% endif %}
+                    {% elif emp.type_remuneration == 'tache' %}
+                        <span class="text-slate-400 text-xs">Manuel</span>
+                    {% else %}
+                        <span class="text-amber-500 text-xs font-semibold">—</span>
+                    {% endif %}
+                </td>
+
+                <td class="px-3 py-3 text-right font-black text-slate-950">
+                    {{ "%.2f"|format(ligne.total_mois) }}
+                </td>
+
+                <td class="px-4 py-3 text-center">
+                    {% if 'solde_fin_mois_non_paye' in ligne.alertes %}
+                        <span class="inline-flex items-center rounded-full bg-red-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-red-700">Non payé</span>
+                    {% elif emp.type_remuneration == 'tache' %}
+                        <span class="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-blue-700">Tâche</span>
+                    {% else %}
+                        <span class="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-emerald-700">✓ Payé</span>
+                    {% endif %}
+                </td>
+
+                <td class="px-4 py-3">
+                    <button class="text-xs font-black uppercase text-yellow-600 hover:text-yellow-800"
+                            type="button"
+                            data-modal-open="modal-avance"
+                            data-employe-id="{{ emp.id }}"
+                            data-employe-nom="{{ emp.nom_complet }}">
+                        + Op.
+                    </button>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td class="px-4 py-10 text-center text-sm font-semibold text-slate-400" colspan="9">
+                    Aucun employé actif.
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr class="border-t-2 border-slate-300 bg-slate-50">
+                <td class="px-4 py-3 text-sm font-black text-slate-950" colspan="6">Total net salaires {{ mois }}/{{ annee }}</td>
+                <td class="px-3 py-3 text-right text-base font-black text-slate-950">
+                    {{ "%.2f"|format(total) }} DH
+                </td>
+                <td colspan="2"></td>
+            </tr>
+        </tfoot>
+    </table>
+</section>
+
+{# ── Modal : saisie avance / prime / tâche ───────────────────────────────── #}
+{# Classes Tailwind référencées par JS — ne pas supprimer ce commentaire :
+   bg-amber-500 text-white border-amber-500 bg-white text-amber-700 border-amber-300 hover:bg-amber-50
+   bg-blue-500 text-white border-blue-500 bg-white text-blue-700 border-blue-300 hover:bg-blue-50
+   bg-violet-500 text-white border-violet-500 bg-white text-violet-700 border-violet-300 hover:bg-violet-50
+   bg-red-500 text-white border-red-500 bg-white text-red-700 border-red-300 hover:bg-red-50
+   bg-slate-500 text-white border-slate-500 bg-white text-slate-600 border-slate-300 hover:bg-slate-50
+   bg-yellow-500 text-white border-yellow-500 bg-white text-yellow-700 border-yellow-300 hover:bg-yellow-50
+   bg-orange-500 text-white border-orange-500 bg-white text-orange-700 border-orange-300 hover:bg-orange-50
+#}
+<div id="modal-avance"
+     class="rh-modal"
+     role="dialog" aria-modal="true">
+
+    <div id="modal-avance-panel" class="rh-modal-panel rh-modal-panel-lg">
+        <div class="rh-modal-header">
+            <div>
+                <p class="text-[10px] font-black uppercase tracking-widest text-slate-400">Livre de paie</p>
+                <h2 class="mt-0.5 text-xl font-black text-slate-950">Ajouter une opération</h2>
+            </div>
+            <button type="button" data-modal-close="modal-avance" class="rh-modal-close">✕</button>
+        </div>
+
+        <form id="form-avance" action="{{ url_for('rh.nouvelle_avance') }}" method="post"
+              class="contents">
+            <div class="rh-modal-body grid gap-5">
+
+            <input type="hidden" name="type" id="input-type-avance" value="avance">
+
+            {# Employé #}
+            <div class="grid gap-2">
+                <label class="text-[10px] font-black uppercase tracking-widest text-slate-400" for="select-employe-avance">
+                    Employé
+                </label>
+                <select id="select-employe-avance" name="employe_id" required
+                        class="h-12 rounded-xl border-2 border-slate-200 px-3 text-sm font-semibold text-slate-800
+                               focus:border-yellow-400 focus:ring-4 focus:ring-yellow-100 outline-none transition bg-white">
+                    <option value="">— Choisir un employé —</option>
+                    {% for ligne in lignes %}
+                    <option value="{{ ligne.employe.id }}">{{ ligne.employe.nom_complet }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            {# Type pills #}
+            <div class="grid gap-2">
+                <label class="text-[10px] font-black uppercase tracking-widest text-slate-400">Nature de l'opération</label>
+                <div class="flex flex-wrap gap-2">
+                    <button type="button" class="type-pill rounded-xl border-2 px-4 py-2 text-xs font-black transition"
+                            data-type="avance"
+                            data-act="bg-amber-500 text-white border-amber-500"
+                            data-inact="bg-white text-amber-700 border-amber-300 hover:bg-amber-50">
+                        Avance
+                    </button>
+                    <button type="button" class="type-pill rounded-xl border-2 px-4 py-2 text-xs font-black transition"
+                            data-type="prime"
+                            data-act="bg-blue-500 text-white border-blue-500"
+                            data-inact="bg-white text-blue-700 border-blue-300 hover:bg-blue-50">
+                        Prime
+                    </button>
+                    <button type="button" class="type-pill rounded-xl border-2 px-4 py-2 text-xs font-black transition"
+                            data-type="tache"
+                            data-act="bg-violet-500 text-white border-violet-500"
+                            data-inact="bg-white text-violet-700 border-violet-300 hover:bg-violet-50">
+                        Tâche
+                    </button>
+                    <button type="button" class="type-pill rounded-xl border-2 px-4 py-2 text-xs font-black transition"
+                            data-type="credit"
+                            data-act="bg-red-500 text-white border-red-500"
+                            data-inact="bg-white text-red-700 border-red-300 hover:bg-red-50">
+                        Crédit
+                    </button>
+                    <button type="button" class="type-pill rounded-xl border-2 px-4 py-2 text-xs font-black transition"
+                            data-type="frais"
+                            data-act="bg-slate-500 text-white border-slate-500"
+                            data-inact="bg-white text-slate-600 border-slate-300 hover:bg-slate-50">
+                        Frais
+                    </button>
+                    <button type="button" class="type-pill rounded-xl border-2 px-4 py-2 text-xs font-black transition"
+                            data-type="cumul"
+                            data-act="bg-yellow-500 text-white border-yellow-500"
+                            data-inact="bg-white text-yellow-700 border-yellow-300 hover:bg-yellow-50">
+                        Cumul
+                    </button>
+                    <button type="button" class="type-pill rounded-xl border-2 px-4 py-2 text-xs font-black transition"
+                            data-type="reste_du"
+                            data-act="bg-orange-500 text-white border-orange-500"
+                            data-inact="bg-white text-orange-700 border-orange-300 hover:bg-orange-50">
+                        Reste dû
+                    </button>
+                </div>
+                <p id="type-help" class="text-xs font-semibold text-slate-500"></p>
+            </div>
+
+            {# Date + Montant #}
+            <div class="grid grid-cols-2 gap-3">
+                <div class="grid gap-2">
+                    <label class="text-[10px] font-black uppercase tracking-widest text-slate-400" for="avance-date">Date</label>
+                    <input type="date" name="date" id="avance-date" required
+                           class="h-12 rounded-xl border-2 border-slate-200 px-3 text-sm font-semibold
+                                  focus:border-yellow-400 focus:ring-4 focus:ring-yellow-100 outline-none transition">
+                </div>
+                <div class="grid gap-2">
+                    <label class="text-[10px] font-black uppercase tracking-widest text-slate-400" for="avance-montant">Montant (DH)</label>
+                    <input type="number" name="montant" id="avance-montant"
+                           step="0.01" min="0.01" required placeholder="0,00"
+                           class="h-12 rounded-xl border-2 border-slate-200 px-3 text-sm font-semibold
+                                  focus:border-yellow-400 focus:ring-4 focus:ring-yellow-100 outline-none transition">
+                </div>
+            </div>
+
+            {# Description #}
+            <div class="grid gap-2">
+                <label class="text-[10px] font-black uppercase tracking-widest text-slate-400" for="avance-description">
+                    Libellé <span class="normal-case font-semibold text-slate-400 text-xs">(optionnel)</span>
+                </label>
+                <input type="text" name="description" id="avance-description"
+                       placeholder="Ex : Prime Mercedes, avance personnelle, mission peinture..."
+                       class="h-12 rounded-xl border-2 border-slate-200 px-3 text-sm
+                              focus:border-yellow-400 focus:ring-4 focus:ring-yellow-100 outline-none transition">
+            </div>
+
+            {# Paiement partiel (conditionnel) #}
+            <div id="champs-reste-du"
+                 class="hidden gap-3 rounded-2xl border-2 border-orange-200 bg-orange-50 p-4">
+                <p class="text-[10px] font-black uppercase tracking-widest text-orange-500">Paiement partiel</p>
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="grid gap-1.5">
+                        <label class="text-xs font-semibold text-slate-600">Total convenu (DH)</label>
+                        <input type="number" name="montant_total_convenu" id="input-total-convenu"
+                               step="0.01" placeholder="Ex : 7 000"
+                               class="h-11 rounded-xl border-2 border-orange-200 bg-white px-3 text-sm outline-none
+                                      focus:border-orange-400 focus:ring-4 focus:ring-orange-100">
+                    </div>
+                    <div class="grid gap-1.5">
+                        <label class="text-xs font-semibold text-slate-600">Reste dû (calculé)</label>
+                        <input type="number" name="reste_du" id="input-reste-du" readonly
+                               class="h-11 rounded-xl border-2 border-orange-300 bg-orange-100 px-3 text-sm
+                                      font-black text-orange-700 outline-none cursor-not-allowed">
+                    </div>
+                </div>
+            </div>
+
+            {# Boutons #}
+            </div>
+            <div class="rh-modal-footer">
+                <button type="button" data-modal-close="modal-avance"
+                        class="rh-action-btn-muted">
+                    Annuler
+                </button>
+                <button type="submit" id="btn-submit-avance"
+                        class="rh-action-btn-primary gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <span id="btn-submit-label">Enregistrer</span>
+                    <svg id="btn-spinner" class="hidden h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-dasharray="32" stroke-dashoffset="12" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{# ── Modal : calcul soldes fin de mois avec prorata ──────────────────────── #}
+<div id="modal-soldes" class="rh-modal" role="dialog" aria-modal="true">
+    <div id="modal-soldes-panel" class="rh-modal-panel rh-modal-panel-xl">
+        <div class="rh-modal-header">
+            <div>
+                <p class="text-[10px] font-black uppercase tracking-widest text-slate-400">Fin de mois</p>
+                <h2 class="text-lg font-black text-slate-950">Calculer les soldes — {{ ['','Jan','Fév','Mar','Avr','Mai','Juin','Juil','Août','Sep','Oct','Nov','Déc'][mois] }} {{ annee }}</h2>
+            </div>
+            <button class="rh-modal-close" type="button" data-modal-close="modal-soldes">✕</button>
+        </div>
+        <form method="post" action="{{ url_for('rh.calculer_soldes', annee=annee, mois=mois) }}" class="contents">
+            <div class="rh-modal-body">
+            <div class="rh-dialog-note mb-4">
+                Le solde utilise le brut de la deuxième quinzaine, moins les avances/crédits pris après le 15.
+                Ajustez le brut pour les cas particuliers, ou indiquez les jours travaillés en cas de prorata.
+            </div>
+            <div class="grid gap-2">
+                {% for ligne in lignes %}
+                {% set emp = ligne.employe %}
+                {% if emp.type_remuneration in ('salaire_fixe', 'mixte') %}
+                <div class="flex items-center gap-4 rounded-lg border border-slate-200 px-4 py-2.5">
+                    <span class="flex-1 font-semibold text-slate-900">{{ emp.nom_complet }}</span>
+                    <span class="text-xs text-slate-400">{{ "%.2f"|format(emp.salaire_quinzaine) }} DH / quinzaine</span>
+                    {% if ligne.solde %}
+                    <span class="text-xs font-black text-emerald-600">✓ Déjà payé</span>
+                    {% else %}
+                    <div class="flex items-center gap-2">
+                        <label class="text-xs text-slate-500" for="brut_solde_{{ emp.id }}">Brut solde</label>
+                        <input type="number" name="brut_solde_{{ emp.id }}" id="brut_solde_{{ emp.id }}"
+                               step="0.01" min="0" value="{{ "%.2f"|format(emp.salaire_quinzaine) }}"
+                               class="h-9 w-24 rounded-md border border-slate-300 px-2 text-center text-sm focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100 outline-none">
+                        <label class="text-xs text-slate-500" for="jours_{{ emp.id }}">Jours</label>
+                        <input type="number" name="jours_{{ emp.id }}" id="jours_{{ emp.id }}"
+                               min="0" max="{{ jours_ouvrables_fin_mois }}" placeholder="{{ jours_ouvrables_fin_mois }}"
+                               class="h-9 w-20 rounded-md border border-slate-300 px-2 text-center text-sm focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100 outline-none">
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+            </div>
+            <div class="rh-modal-footer">
+                <button class="rh-action-btn-muted" type="button" data-modal-close="modal-soldes">Annuler</button>
+                <button class="rh-action-btn-primary" type="submit">Calculer et enregistrer</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+(() => {
+    // ── Toast ────────────────────────────────────────────────────────────────
+    function showToast(message, type) {
+        const base = 'fixed bottom-6 right-6 z-[200] flex items-center gap-3 rounded-2xl px-5 py-3.5 shadow-2xl text-sm font-semibold translate-y-4 opacity-0 transition-all duration-300';
+        const color = type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white';
+        const icon  = type === 'success' ? '✓' : '✕';
+        const t = document.createElement('div');
+        t.className = `${base} ${color}`;
+        t.innerHTML = `<span class="text-base leading-none">${icon}</span><span>${message}</span>`;
+        document.body.appendChild(t);
+        requestAnimationFrame(() => t.classList.remove('translate-y-4', 'opacity-0'));
+        setTimeout(() => {
+            t.classList.add('translate-y-4', 'opacity-0');
+            setTimeout(() => t.remove(), 300);
+        }, 3500);
+    }
+
+    // ── Modal open / close ───────────────────────────────────────────────────
+    function openModal(id) {
+        const modal = document.getElementById(id);
+        if (!modal) return;
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        document.body.style.overflow = 'hidden';
+        modal.scrollTop = 0;
+        requestAnimationFrame(() => {
+            const panel = document.getElementById(id + '-panel');
+            panel?.classList.add('rh-modal-panel-open');
+            panel?.scrollTo?.(0, 0);
+        });
+    }
+
+    function closeModal(id) {
+        const panel = document.getElementById(id + '-panel');
+        panel?.classList.remove('rh-modal-panel-open');
+        setTimeout(() => {
+            const modal = document.getElementById(id);
+            modal?.classList.add('hidden');
+            modal?.classList.remove('flex');
+            const modalOuverte = document.querySelector('.rh-modal.flex');
+            if (!modalOuverte) document.body.style.overflow = '';
+        }, 200);
+    }
+
+    document.querySelectorAll('[data-modal-open]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const id = btn.dataset.modalOpen;
+            openModal(id);
+            if (id === 'modal-avance') {
+                const empId = btn.dataset.employeId;
+                if (empId) {
+                    const sel = document.getElementById('select-employe-avance');
+                    if (sel) sel.value = empId;
+                }
+            }
+        });
+    });
+
+    document.querySelectorAll('[data-modal-close]').forEach(el => {
+        el.addEventListener('click', () => closeModal(el.dataset.modalClose));
+    });
+
+    // Fermeture sur le backdrop
+    document.querySelectorAll('[data-backdrop]').forEach(bd => {
+        bd.addEventListener('click', () => closeModal(bd.dataset.backdrop));
+    });
+
+    // Fermeture avec Échap
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') ['modal-quinzaine', 'modal-avance', 'modal-soldes'].forEach(closeModal);
+    });
+
+    // ── Type pills ───────────────────────────────────────────────────────────
+    const typeInput  = document.getElementById('input-type-avance');
+    const champsDu   = document.getElementById('champs-reste-du');
+    const totalInput = document.getElementById('input-total-convenu');
+    const resteInput = document.getElementById('input-reste-du');
+    const montantInp = document.getElementById('avance-montant');
+    const typeHelp   = document.getElementById('type-help');
+    const helpByType = {
+        avance: 'Avance versée à déduire du prochain solde.',
+        credit: 'Crédit à déduire du prochain solde.',
+        prime: 'Prime ajoutée au total du mois, non déduite du solde.',
+        tache: 'Paiement d’une mission ou tâche, avec reste dû possible.',
+        frais: 'Frais suivi à part, hors total salaires.',
+        cumul: 'Cumul ou régularisation ajouté au total du mois.',
+        reste_du: 'Paiement partiel ou suivi d’un montant restant dû.',
+    };
+
+    function applyPill(type) {
+        typeInput.value = type;
+        document.querySelectorAll('.type-pill').forEach(pill => {
+            const act   = pill.dataset.act.split(' ');
+            const inact = pill.dataset.inact.split(' ');
+            act.forEach(c => pill.classList.remove(c));
+            inact.forEach(c => pill.classList.remove(c));
+            if (pill.dataset.type === type) {
+                act.forEach(c => pill.classList.add(c));
+            } else {
+                inact.forEach(c => pill.classList.add(c));
+            }
+        });
+        const showReste = ['tache', 'reste_du'].includes(type);
+        champsDu.classList.toggle('hidden', !showReste);
+        champsDu.classList.toggle('grid', showReste);
+        if (typeHelp) typeHelp.textContent = helpByType[type] || '';
+    }
+
+    document.querySelectorAll('.type-pill').forEach(pill => {
+        pill.addEventListener('click', () => applyPill(pill.dataset.type));
+    });
+
+    // Init : "Avance" sélectionné par défaut
+    applyPill('avance');
+
+    // ── Auto-calc reste dû ───────────────────────────────────────────────────
+    function calcReste() {
+        const total = parseFloat(totalInput?.value) || 0;
+        const paye  = parseFloat(montantInp?.value) || 0;
+        if (resteInput) resteInput.value = total > 0 ? Math.max(0, total - paye).toFixed(2) : '';
+    }
+    totalInput?.addEventListener('input', calcReste);
+    montantInp?.addEventListener('input', calcReste);
+
+    // ── Date par défaut = aujourd'hui ────────────────────────────────────────
+    const dateInput = document.getElementById('avance-date');
+    if (dateInput) dateInput.value = new Date().toISOString().slice(0, 10);
+
+    // ── Fetch submit ─────────────────────────────────────────────────────────
+    const form      = document.getElementById('form-avance');
+    const submitBtn = document.getElementById('btn-submit-avance');
+    const submitLbl = document.getElementById('btn-submit-label');
+    const spinner   = document.getElementById('btn-spinner');
+
+    form?.addEventListener('submit', async e => {
+        e.preventDefault();
+        submitBtn.disabled = true;
+        submitLbl.textContent = 'Enregistrement…';
+        spinner?.classList.remove('hidden');
+
+        try {
+            const res  = await fetch(form.action, {
+                method:  'POST',
+                body:    new FormData(form),
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            const data = await res.json();
+
+            if (data.ok) {
+                closeModal('modal-avance');
+                form.reset();
+                applyPill('avance');
+                dateInput.value = new Date().toISOString().slice(0, 10);
+                showToast(data.message, 'success');
+                setTimeout(() => location.reload(), 1800);
+            } else {
+                showToast(data.message || 'Erreur lors de l\'enregistrement.', 'error');
+            }
+        } catch {
+            showToast('Erreur réseau — veuillez réessayer.', 'error');
+        } finally {
+            submitBtn.disabled = false;
+            submitLbl.textContent = 'Enregistrer';
+            spinner?.classList.add('hidden');
+        }
+    });
+
+    // ── Backdrops des modals sans calque dédié ───────────────────────────────
+    document.querySelectorAll('.rh-modal').forEach(modal => {
+        modal.addEventListener('click', e => {
+            if (e.target === modal) closeModal(modal.id);
+        });
+    });
+})();
+</script>
+
+{% endblock %}

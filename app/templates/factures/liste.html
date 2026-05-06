@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}Factures - Monster Garage{% endblock %}
+
+{% block content %}
+<section class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div>
+        <p class="text-sm font-semibold text-slate-500">Facturation finale</p>
+        <h1 class="mt-1 text-3xl font-black tracking-tight text-slate-950">Factures</h1>
+    </div>
+    <a class="inline-flex h-10 items-center justify-center rounded-md bg-monster-jaune px-4 text-sm font-black text-black transition hover:bg-yellow-300 focus:outline-none focus:ring-4 focus:ring-yellow-200" href="{{ url_for('dossiers.liste', statut='completed') }}">Dossiers terminés</a>
+</section>
+
+<section class="mb-5 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <form class="flex flex-col gap-3 sm:flex-row" method="get">
+        <select class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="statut">
+            <option value="">Tous les statuts</option>
+            <option value="emise" {% if statut == 'emise' %}selected{% endif %}>Émise</option>
+            <option value="livree" {% if statut == 'livree' %}selected{% endif %}>Livrée</option>
+            <option value="reglee" {% if statut == 'reglee' %}selected{% endif %}>Réglée</option>
+            <option value="annulee" {% if statut == 'annulee' %}selected{% endif %}>Annulée</option>
+        </select>
+        <button class="h-11 rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50" type="submit">Filtrer</button>
+    </form>
+</section>
+
+<section class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+    <div class="grid grid-cols-[130px_130px_1fr_1fr_150px_130px] gap-4 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-wide text-slate-500">
+        <span>Facture</span>
+        <span>Dossier</span>
+        <span>Client</span>
+        <span>Véhicule</span>
+        <span>Montant TTC</span>
+        <span>Statut</span>
+    </div>
+    <div class="divide-y divide-slate-200">
+        {% for facture in factures %}
+            <a class="grid grid-cols-[130px_130px_1fr_1fr_150px_130px] gap-4 px-4 py-4 text-sm transition hover:bg-yellow-50" href="{{ url_for('factures.detail', facture_id=facture.id) }}">
+                <span class="font-black text-slate-950">{{ facture.numero }}</span>
+                <span class="font-semibold text-slate-700">{{ facture.dossier.numero }}</span>
+                <span class="font-semibold text-slate-700">{{ facture.dossier.client.nom }}</span>
+                <span class="text-slate-600">{{ facture.dossier.vehicule.libelle }}</span>
+                <span class="font-black text-slate-950">{{ "%.2f"|format(facture.montant_ttc) }} MAD</span>
+                <span class="font-bold text-slate-700">{{ facture.statut_libelle }}</span>
+            </a>
+        {% else %}
+            <p class="px-4 py-8 text-center text-sm font-semibold text-slate-500">Aucune facture générée pour le moment.</p>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

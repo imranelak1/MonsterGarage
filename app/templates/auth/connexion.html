@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block title %}Connexion - Monster Garage{% endblock %}
+
+{% block auth_content %}
+<div id="login-shell" class="login-light min-h-screen bg-[#111111] font-sans text-white">
+    <main class="grid min-h-screen lg:grid-cols-[minmax(0,1.12fr)_minmax(400px,0.88fr)]">
+        <section class="relative flex min-h-[380px] items-center overflow-hidden bg-[#111111] px-5 py-8 sm:px-8 lg:min-h-screen lg:px-12 xl:px-16">
+            <div class="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1581182546215-2cb6ad1d6a61?auto=format&w=1200&q=80&fit=crop')] bg-cover bg-center opacity-75"></div>
+            <div class="absolute inset-0 bg-gradient-to-br from-black/85 via-black/68 to-black/42"></div>
+            <div class="login-crosshatch absolute inset-0 opacity-35"></div>
+
+            <div class="relative z-10 w-full max-w-[660px]">
+                <div class="mb-5 inline-flex items-center gap-3 border-l-4 border-monster-jaune bg-black/55 px-4 py-3">
+                    <span class="text-[10px] font-black uppercase tracking-[0.36em] text-monster-jaune">Accès atelier</span>
+                    <span class="h-1 w-1 rounded-full bg-white/40"></span>
+                    <span class="text-[10px] font-bold uppercase tracking-[0.18em] text-white/55">ERP réparation</span>
+                </div>
+
+                <div class="login-neon border border-yellow-300/70 bg-black/78 p-6 sm:p-8 lg:p-9">
+                    <div class="mb-7 flex items-center gap-5">
+                        <div class="flex h-24 w-36 shrink-0 items-center justify-center bg-white p-3 shadow-[7px_7px_0_rgba(255,216,0,0.9)] sm:h-28 sm:w-44">
+                            <img class="h-auto max-h-full w-full object-contain" src="{{ url_for('static', filename='img/logo_monster_garage.png') }}" alt="Monster Garage">
+                        </div>
+                        <div class="min-w-0">
+                            <p class="mb-2 text-[10px] font-black uppercase tracking-[0.24em] text-white/45">Système de Gestion Atelier</p>
+                            <h1 class="text-4xl font-black uppercase italic leading-none text-white sm:text-5xl lg:text-6xl" data-login-title>
+                                Monster <span class="text-monster-jaune">Garage</span>
+                            </h1>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="mt-5 flex flex-wrap items-center gap-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/42">
+                    <span>© 2026 Monster Garage</span>
+                    <span class="h-1 w-1 rounded-full bg-monster-jaune"></span>
+                    <span>v4.0.9 Core</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="relative flex min-h-screen flex-col justify-center overflow-hidden border-t border-white/10 bg-[#191919] px-5 py-8 sm:px-10 lg:border-l lg:border-t-0 lg:px-12 xl:px-16" data-login-panel>
+            <div class="absolute right-0 top-0 h-1 w-full bg-monster-jaune lg:h-full lg:w-1"></div>
+
+            <button class="absolute right-5 top-5 z-20 grid h-10 w-10 place-items-center rounded-full border border-white/10 bg-white/5 text-base font-black text-monster-jaune shadow-lg transition hover:bg-white/10 sm:right-8 sm:top-8" type="button" data-login-theme title="Basculer le thème">
+                <span data-login-theme-icon>☾</span>
+            </button>
+
+            <div class="relative z-10 mx-auto w-full max-w-[430px]">
+                {% include "partials/messages.html" %}
+
+                <div class="mb-8">
+                    <div class="mb-3 flex items-center gap-2.5 text-monster-jaune">
+                        <span class="grid h-6 w-6 place-items-center rounded-full border border-yellow-300/40 text-[10px] font-black">OK</span>
+                        <span class="text-[10px] font-black uppercase tracking-[0.2em]">Session sécurisée</span>
+                    </div>
+                    <h2 id="titre-connexion" class="text-3xl font-black uppercase italic tracking-tight text-white sm:text-4xl" data-login-heading>Connexion</h2>
+                </div>
+
+                <form method="post" name="login" class="relative z-10 grid gap-6" aria-labelledby="titre-connexion">
+                    <label class="grid gap-3">
+                        <span class="ml-1 text-[11px] font-black uppercase tracking-[0.24em] text-zinc-500" data-login-muted>Identifiant</span>
+                        <span class="relative block">
+                            <span class="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-black text-zinc-600">ID</span>
+                            <input class="h-14 w-full border-0 border-b-2 border-zinc-800 bg-black pl-12 pr-4 text-base font-semibold text-white outline-none placeholder:text-zinc-800 focus:border-monster-jaune focus:ring-0" data-login-input type="text" name="login" autocomplete="username" required autofocus placeholder="Utilisateur">
+                        </span>
+                    </label>
+
+                    <label class="grid gap-3">
+                        <span class="ml-1 text-[11px] font-black uppercase tracking-[0.24em] text-zinc-500" data-login-muted>Mot de passe</span>
+                        <span class="relative block">
+                            <span class="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-black text-zinc-600">PW</span>
+                            <input class="h-14 w-full border-0 border-b-2 border-zinc-800 bg-black pl-12 pr-4 text-base font-semibold text-white outline-none placeholder:text-zinc-800 focus:border-monster-jaune focus:ring-0" data-login-input type="password" name="mot_de_passe" autocomplete="current-password" required placeholder="••••••••">
+                        </span>
+                    </label>
+
+                    <div class="pt-1">
+                        <button class="login-hard-shadow flex h-14 w-full items-center justify-center gap-3 bg-monster-jaune px-4 text-base font-black uppercase tracking-tight text-black transition hover:bg-yellow-300 focus:outline-none focus:ring-4 focus:ring-yellow-200" type="submit">
+                            <span>Entrer dans l'atelier</span>
+                            <span class="text-xl leading-none">→</span>
+                        </button>
+                    </div>
+                </form>
+
+                <div class="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-5 text-[10px] font-black uppercase tracking-[0.16em] text-zinc-600" data-login-muted>
+                    <span class="flex items-center gap-2"><span class="h-1.5 w-1.5 rounded-full bg-green-500"></span> Serveur opérationnel</span>
+                    <span>Accès chiffré</span>
+                </div>
+            </div>
+
+            <div class="pointer-events-none absolute -bottom-24 -right-24 h-56 w-56 rotate-45 opacity-20">
+                <div class="login-caution-stripes h-full w-full"></div>
+            </div>
+        </section>
+    </main>
+</div>
+
+<script>
+    (() => {
+        const shell = document.getElementById("login-shell");
+        const toggle = document.querySelector("[data-login-theme]");
+        const icon = document.querySelector("[data-login-theme-icon]");
+
+        toggle?.addEventListener("click", () => {
+            shell.classList.toggle("login-light");
+            icon.textContent = shell.classList.contains("login-light") ? "☾" : "☀";
+        });
+    })();
+</script>
+{% endblock %}

@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block title %}{% if employe %}Modifier {{ employe.nom_complet }}{% else %}Nouvel employé{% endif %} - Monster Garage{% endblock %}
+
+{% block content %}
+<section class="mb-6">
+    <p class="text-sm font-semibold text-slate-500">
+        <a class="hover:text-yellow-600" href="{{ url_for('rh.liste_employes') }}">Employés</a>
+        <span class="mx-1">›</span>
+        {% if employe %}<a class="hover:text-yellow-600" href="{{ url_for('rh.fiche_employe', employe_id=employe.id) }}">{{ employe.nom_complet }}</a>
+        <span class="mx-1">›</span> Modifier{% else %}Nouveau{% endif %}
+    </p>
+    <h1 class="mt-1 text-3xl font-black tracking-tight text-slate-950">
+        {% if employe %}Modifier la fiche{% else %}Nouvel employé{% endif %}
+    </h1>
+</section>
+
+<form method="post"
+      action="{{ url_for('rh.modifier_employe', employe_id=employe.id) if employe else url_for('rh.nouvel_employe') }}"
+      class="mx-auto max-w-2xl grid gap-5">
+
+    <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm grid gap-4">
+        <h2 class="text-xs font-black uppercase tracking-wide text-slate-500">Identité</h2>
+
+        <div class="grid gap-1.5">
+            <label class="text-sm font-black text-slate-700" for="nom_complet">Nom complet <span class="text-red-500">*</span></label>
+            <input type="text" id="nom_complet" name="nom_complet" required
+                   value="{{ employe.nom_complet if employe else '' }}"
+                   placeholder="Ex: SAID, SIMOHAMED..."
+                   class="h-11 rounded-md border border-slate-300 px-3 uppercase focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100 outline-none">
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+            <div class="grid gap-1.5">
+                <label class="text-sm font-black text-slate-700" for="cin">CIN</label>
+                <input type="text" id="cin" name="cin"
+                       value="{{ employe.cin or '' if employe else '' }}"
+                       placeholder="AB123456"
+                       class="h-11 rounded-md border border-slate-300 px-3 uppercase focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100 outline-none">
+            </div>
+            <div class="grid gap-1.5">
+                <label class="text-sm font-black text-slate-700" for="telephone">Téléphone</label>
+                <input type="tel" id="telephone" name="telephone"
+                       value="{{ employe.telephone or '' if employe else '' }}"
+                       placeholder="06xxxxxxxx"
+                       class="h-11 rounded-md border border-slate-300 px-3 focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100 outline-none">
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+            <div class="grid gap-1.5">
+                <label class="text-sm font-black text-slate-700" for="fonction">Fonction <span class="text-red-500">*</span></label>
+                <select id="fonction" name="fonction" required
+                        class="h-11 rounded-md border border-slate-300 px-3 focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100 outline-none">
+                    {% for val, label in [
+                        ('gerant','Gérant'),('chef_atelier','Chef Atelier'),
+                        ('mecanicien','Mécanicien'),('electricien','Électricien'),
+                        ('tolier','Tôlier'),('peintre','Peintre'),
+                        ('diagnostic','Diagnostic'),('mecanicien_nautique','Mécanicien Nautique'),
+                        ('ouvrier','Ouvrier'),('administratif','Administratif'),('autre','Autre')
+                    ] %}
+                    <option value="{{ val }}" {% if employe and employe.fonction == val %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="grid gap-1.5">
+                <label class="text-sm font-black text-slate-700" for="date_embauche">Date d'embauche</label>
+                <input type="date" id="date_embauche" name="date_embauche"
+                       value="{{ employe.date_embauche.isoformat() if employe and employe.date_embauche else '' }}"
+                       class="h-11 rounded-md border border-slate-300 px-3 focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100 outline-none">
+            </div>
+        </div>
+
+        <div class="grid gap-1.5">
+            <label class="text-sm font-black text-slate-700" for="adresse">Adresse</label>
+            <textarea id="adresse" name="adresse" rows="2"
+                      class="rounded-md border border-slate-300 px-3 py-2 focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100 outline-none resize-none">{{ employe.adresse or '' if employe else '' }}</textarea>
+        </div>
+    </section>
+
+    <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm grid gap-4">
+        <h2 class="text-xs font-black uppercase tracking-wide text-slate-500">Rémunération</h2>
+
+        <div class="grid gap-1.5">
+            <label class="text-sm font-black text-slate-700" for="type_remuneration">Type de rémunération</label>
+            <select id="type_remuneration" name="type_remuneration"
+                    class="h-11 rounded-md border border-slate-300 px-3 focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100 outline-none">
+                <option value="tache" {% if not employe or employe.type_remuneration == 'tache' %}selected{% endif %}>À la tâche</option>
+                <option value="salaire_fixe" {% if employe and employe.type_remuneration == 'salaire_fixe' %}selected{% endif %}>Salaire fixe</option>
+                <option value="mixte" {% if employe and employe.type_remuneration == 'mixte' %}selected{% endif %}>Mixte (fixe + primes)</option>
+            </select>
+        </div>
+
+        <div id="champ-salaire" class="grid gap-1.5 {% if not employe or employe.type_remuneration == 'tache' %}hidden{% endif %}">
+            <label class="text-sm font-black text-slate-700" for="salaire_quinzaine">Salaire quinzaine (DH)</label>
+            <input type="number" id="salaire_quinzaine" name="salaire_quinzaine" step="0.01" min="0"
+                   value="{{ employe.salaire_quinzaine or '' if employe else '' }}"
+                   placeholder="Ex: 2250"
+                   class="h-11 rounded-md border border-slate-300 px-3 focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100 outline-none">
+            <p class="text-xs text-slate-400">Montant payé au 15 et base du solde fin de mois.</p>
+        </div>
+    </section>
+
+    {% if employe %}
+    <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 class="mb-3 text-xs font-black uppercase tracking-wide text-slate-500">Statut</h2>
+        <label class="flex cursor-pointer items-center gap-3">
+            <input type="checkbox" name="actif" value="1" {% if employe.actif %}checked{% endif %}
+                   class="h-4 w-4 rounded border-slate-300 accent-yellow-400">
+            <span class="text-sm font-semibold text-slate-700">Employé actif</span>
+        </label>
+    </section>
+    {% endif %}
+
+    <div class="flex justify-end gap-3">
+        <a class="inline-flex h-11 items-center justify-center rounded-md border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 hover:bg-slate-50"
+           href="{{ url_for('rh.fiche_employe', employe_id=employe.id) if employe else url_for('rh.liste_employes') }}">
+            Annuler
+        </a>
+        <button class="inline-flex h-11 items-center justify-center rounded-md bg-monster-jaune px-6 text-sm font-black text-black hover:bg-yellow-300"
+                type="submit">
+            {% if employe %}Enregistrer les modifications{% else %}Créer l'employé{% endif %}
+        </button>
+    </div>
+</form>
+
+<script>
+const typeSelect = document.getElementById('type_remuneration');
+const champSalaire = document.getElementById('champ-salaire');
+typeSelect?.addEventListener('change', () => {
+    champSalaire?.classList.toggle('hidden', typeSelect.value === 'tache');
+});
+</script>
+
+{% endblock %}

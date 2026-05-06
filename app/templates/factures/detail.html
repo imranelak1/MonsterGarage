@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block title %}{{ facture.numero }} - Monster Garage{% endblock %}
+
+{% block content %}
+<section class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div>
+        <p class="text-sm font-semibold text-slate-500">Facture finale</p>
+        <h1 class="mt-1 text-3xl font-black tracking-tight text-slate-950">{{ facture.numero }}</h1>
+    </div>
+    <div class="flex flex-wrap gap-2">
+        <a class="inline-flex h-10 items-center justify-center rounded-md bg-monster-jaune px-4 text-sm font-black text-black transition hover:bg-yellow-300" href="{{ url_for('factures.telecharger', facture_id=facture.id) }}">Exporter facture</a>
+        <a class="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50" href="{{ url_for('factures.releve_client', client_id=facture.dossier.client_id) }}">Relevé client</a>
+        <a class="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50" href="{{ url_for('dossiers.detail', dossier_id=facture.dossier_id) }}">Voir dossier</a>
+        <a class="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50" href="{{ url_for('factures.liste') }}">Retour factures</a>
+    </div>
+</section>
+
+<section class="mb-5 rounded-lg border-l-8 border-monster-jaune bg-black p-5 text-white shadow-sm">
+    <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+            <p class="text-sm font-black uppercase tracking-wide text-monster-jaune">{{ facture.statut_libelle }}</p>
+            <h2 class="mt-1 text-2xl font-black">{{ facture.dossier.client.nom }} / {{ facture.dossier.vehicule.libelle }}</h2>
+            <p class="mt-2 max-w-4xl text-sm leading-6 text-slate-200">Générée depuis le devis v{{ facture.devis.version }} du dossier {{ facture.dossier.numero }}.</p>
+        </div>
+        <strong class="text-2xl font-black text-monster-jaune">{{ "%.2f"|format(facture.montant_ttc) }} MAD</strong>
+    </div>
+</section>
+
+<section class="grid gap-5 xl:grid-cols-[1fr_1.1fr]">
+    <article class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 class="text-lg font-black text-slate-950">Contrôle livraison & règlement</h2>
+        <div class="mt-4 grid gap-3">
+            {% if facture.statut == 'emise' %}
+                <section class="rounded-md border border-amber-200 bg-amber-50 p-4">
+                    <p class="text-sm font-black text-amber-950">Facture émise</p>
+                    <p class="mt-1 text-sm text-amber-900">Prochaine étape : livrer le véhicule au client.</p>
+                    <form class="mt-3" method="post" action="{{ url_for('factures.livrer', facture_id=facture.id) }}">
+                        <button class="h-10 rounded-md bg-emerald-600 px-4 text-sm font-black text-white" type="submit">Marquer livré</button>
+                    </form>
+                </section>
+            {% elif facture.statut == 'livree' %}
+                <section class="rounded-md border border-blue-200 bg-blue-50 p-4">
+                    <p class="text-sm font-black text-blue-950">Véhicule livré</p>
+                    <p class="mt-1 text-sm text-blue-900">Enregistrez maintenant le règlement final.</p>
+                    <form class="mt-3 grid gap-3 sm:grid-cols-[160px_160px_1fr_auto]" method="post" action="{{ url_for('factures.regler', facture_id=facture.id) }}">
+                        <select class="h-10 rounded-md border border-blue-300 bg-white px-3 text-sm" name="mode_reglement">
+                            <option value="especes">Espèces</option>
+                            <option value="cheque">Chèque</option>
+                            <option value="virement">Virement</option>
+                            <option value="carte">Carte bancaire</option>
+                            <option value="autre">Autre</option>
+                        </select>
+                        <input class="h-10 rounded-md border border-blue-300 bg-white px-3 text-sm" name="montant_reglement" type="number" min="0.01" max="{{ facture.montant_restant }}" step="0.01" required placeholder="{{ '%.2f'|format(facture.montant_restant) }} MAD">
+                        <input class="h-10 rounded-md border border-blue-300 bg-white px-3 text-sm" name="reference_reglement" placeholder="Référence règlement">
+                        <button class="h-10 rounded-md bg-monster-jaune px-4 text-sm font-black text-black" type="submit">Enregistrer règlement</button>
+                    </form>
+                </section>
+            {% elif facture.statut == 'reglee' %}
+                <section class="rounded-md border border-emerald-200 bg-emerald-50 p-4">
+                    <p class="text-sm font-black text-emerald-950">Flux clôturé</p>
+                    <p class="mt-1 text-sm text-emerald-900">Le véhicule est livré et le règlement est enregistré.</p>
+                </section>
+            {% endif %}
+        </div>
+    </article>
+
+    <article class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 class="text-lg font-black text-slate-950">Résumé facture</h2>
+        <dl class="mt-4 grid gap-3 text-sm">
+            <div class="flex justify-between gap-4 border-b border-slate-100 pb-2"><dt class="font-bold text-slate-500">Montant HT</dt><dd class="font-semibold text-slate-900">{{ "%.2f"|format(facture.montant_ht) }} MAD</dd></div>
+            <div class="flex justify-between gap-4 border-b border-slate-100 pb-2"><dt class="font-bold text-slate-500">TVA</dt><dd class="font-semibold text-slate-900">{{ "%.2f"|format(facture.montant_tva) }} MAD</dd></div>
+            <div class="flex justify-between gap-4 border-b border-slate-100 pb-2"><dt class="font-bold text-slate-500">Montant TTC</dt><dd class="font-black text-slate-950">{{ "%.2f"|format(facture.montant_ttc) }} MAD</dd></div>
+            <div class="flex justify-between gap-4 border-b border-slate-100 pb-2"><dt class="font-bold text-slate-500">Montant encaisse</dt><dd class="font-semibold text-emerald-700">{{ "%.2f"|format(facture.montant_regle or 0) }} MAD</dd></div>
+            <div class="flex justify-between gap-4 border-b border-slate-100 pb-2"><dt class="font-bold text-slate-500">Reste a payer</dt><dd class="font-black text-red-700">{{ "%.2f"|format(facture.montant_restant) }} MAD</dd></div>
+            <div class="flex justify-between gap-4 border-b border-slate-100 pb-2"><dt class="font-bold text-slate-500">Créée le</dt><dd class="font-semibold text-slate-900">{{ facture.created_at.strftime("%d/%m/%Y %H:%M") }}</dd></div>
+            <div class="flex justify-between gap-4 border-b border-slate-100 pb-2"><dt class="font-bold text-slate-500">Livrée le</dt><dd class="font-semibold text-slate-900">{{ facture.livree_le.strftime("%d/%m/%Y %H:%M") if facture.livree_le else "-" }}</dd></div>
+            <div class="flex justify-between gap-4 border-b border-slate-100 pb-2"><dt class="font-bold text-slate-500">Réglée le</dt><dd class="font-semibold text-slate-900">{{ facture.reglee_le.strftime("%d/%m/%Y %H:%M") if facture.reglee_le else "-" }}</dd></div>
+            <div class="flex justify-between gap-4"><dt class="font-bold text-slate-500">Mode règlement</dt><dd class="font-semibold text-slate-900">{{ facture.mode_reglement_libelle }}</dd></div>
+        </dl>
+    </article>
+</section>
+
+<section class="mt-5 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <h2 class="text-lg font-black text-slate-950">Lignes facturées</h2>
+    <ul class="mt-4 divide-y divide-slate-200">
+        {% for ligne in facture.devis.lignes %}
+            <li class="grid gap-2 py-3 text-sm sm:grid-cols-[1fr_120px_140px_140px]">
+                <span class="font-bold text-slate-900">{{ ligne.designation }}{% if facture.dossier.client.type != 'sntl' %} ({{ ligne.etat_piece_libelle }}){% endif %}</span>
+                <span class="text-slate-600">{{ ligne.quantite }}</span>
+                <span class="text-slate-600">{{ ligne.prix_unitaire_ht }} HT</span>
+                <span class="font-black text-slate-950">{{ ligne.total_ht }} HT</span>
+            </li>
+        {% endfor %}
+    </ul>
+</section>
+{% endblock %}

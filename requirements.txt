@@ -1,0 +1,16 @@
+Flask>=3.0
+Flask-SQLAlchemy>=3.1
+Flask-Migrate>=4.0
+Flask-Login>=0.6
+Flask-WTF>=1.2
+Werkzeug>=3.0
+python-dotenv>=1.0
+python-dateutil>=2.8
+num2words>=0.5
+phonenumbers>=8.13
+openpyxl>=3.1
+Pillow>=10.0
+XlsxWriter>=3.1
+WeasyPrint>=60
+waitress>=3.0
+pytest>=8.0

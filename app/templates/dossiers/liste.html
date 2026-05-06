@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}Dossiers atelier - Monster Garage{% endblock %}
+
+{% block content %}
+<section class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div>
+        <p class="text-sm font-semibold text-slate-500">Atelier</p>
+        <h1 class="mt-1 text-3xl font-black tracking-tight text-slate-950">Dossiers atelier</h1>
+    </div>
+    <a class="inline-flex h-10 items-center justify-center rounded-md bg-monster-jaune px-4 text-sm font-black text-black transition hover:bg-yellow-300 focus:outline-none focus:ring-4 focus:ring-yellow-200" href="{{ url_for('dossiers.nouveau') }}">Nouvelle prise en charge</a>
+</section>
+
+<section class="mb-5 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <form class="flex flex-col gap-3 sm:flex-row" method="get">
+        <input class="h-11 flex-1 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" type="search" name="q" value="{{ recherche }}" placeholder="Rechercher client, véhicule, matricule, dossier...">
+        <select class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="statut">
+            <option value="">Tous les statuts</option>
+            <option value="pending_devis" {% if statut == 'pending_devis' %}selected{% endif %}>En attente de devis</option>
+            <option value="pending_approval" {% if statut == 'pending_approval' %}selected{% endif %}>En attente d'accord</option>
+            <option value="in_progress" {% if statut == 'in_progress' %}selected{% endif %}>En réparation</option>
+            <option value="paused_pending_approval" {% if statut == 'paused_pending_approval' %}selected{% endif %}>En pause</option>
+            <option value="completed" {% if statut == 'completed' %}selected{% endif %}>Terminé</option>
+            <option value="cancelled" {% if statut == 'cancelled' %}selected{% endif %}>Annulé</option>
+        </select>
+        <button class="h-11 rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50" type="submit">Rechercher</button>
+    </form>
+</section>
+
+<section class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+    <div class="grid grid-cols-[130px_1fr_1fr_180px] gap-4 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-wide text-slate-500">
+        <span>Dossier</span>
+        <span>Client</span>
+        <span>Véhicule</span>
+        <span>Statut</span>
+    </div>
+    <div class="divide-y divide-slate-200">
+        {% for dossier in dossiers %}
+            <a class="grid grid-cols-[130px_1fr_1fr_180px] gap-4 px-4 py-4 text-sm transition hover:bg-yellow-50" href="{{ url_for('dossiers.detail', dossier_id=dossier.id) }}">
+                <span class="font-black text-slate-950">{{ dossier.numero }}</span>
+                <span class="font-semibold text-slate-700">{{ dossier.client.nom }}</span>
+                <span class="text-slate-600">{{ dossier.vehicule.libelle }}</span>
+                <span class="font-bold text-slate-700">{{ dossier.statut_libelle }}</span>
+            </a>
+        {% else %}
+            <p class="px-4 py-8 text-center text-sm font-semibold text-slate-500">Aucun dossier atelier pour le moment.</p>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}
