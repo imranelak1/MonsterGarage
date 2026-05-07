@@ -28,6 +28,7 @@ class DossierReparation(db.Model):
     demande_client = db.Column(db.Text, nullable=False)
     diagnostic_initial = db.Column(db.Text)
     assurance_nom = db.Column(db.String(100))
+    numero_bon_sntl = db.Column(db.String(50))
     kilometrage_entree = db.Column(db.Integer)
     notes = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)

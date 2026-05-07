@@ -184,6 +184,10 @@
                 Kilométrage entrée
                 <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" type="number" name="kilometrage_entree">
             </label>
+            <label class="hidden grid gap-2 text-sm font-bold text-slate-800" data-admin-bon>
+                N° bon / OR
+                <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="numero_bon_sntl" placeholder="Ex : 260429000021">
+            </label>
             <label class="grid gap-2 text-sm font-bold text-slate-800">
                 Notes internes
                 <textarea class="min-h-20 rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="notes"></textarea>
@@ -223,6 +227,7 @@
         const vehiculeNouveauRadio = document.querySelector('input[name="mode_vehicule"][value="nouveau"]');
         const vehicleHint = document.querySelector("[data-vehicle-filter-hint]");
         const assuranceBlock = document.querySelector("[data-assurance-block]");
+        const adminBonBlock = document.querySelector("[data-admin-bon]");
 
         const selectedClientType = () => {
             if (checkedValue("mode_client") === "existant") {
@@ -234,6 +239,7 @@
         const updateClientDependentFields = () => {
             const typeClient = selectedClientType();
             assuranceBlock?.classList.toggle("hidden", typeClient !== "particulier");
+            adminBonBlock?.classList.toggle("hidden", !["sntl", "administration"].includes(typeClient));
             sntlPresetBlock?.classList.toggle("hidden", checkedValue("mode_client") !== "nouveau" || typeClient !== "sntl");
             sntlIceBlock?.classList.toggle("hidden", checkedValue("mode_client") !== "nouveau" || typeClient !== "sntl");
             if (typeClient === "sntl") {

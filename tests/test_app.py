@@ -1294,6 +1294,7 @@ def test_export_facture_sntl_ajoute_commission(client, app):
             "demande_client": "Freinage",
             "diagnostic_initial": "",
             "kilometrage_entree": "333000",
+            "numero_bon_sntl": "260429000021",
             "notes": "",
         },
     )
@@ -1301,7 +1302,15 @@ def test_export_facture_sntl_ajoute_commission(client, app):
         dossier_id = DossierReparation.query.first().id
     client.post(
         f"/dossiers/{dossier_id}/devis/nouveau",
-        data={"objet": "Freinage", "designation_1": "PLAQUETTE DE FREIN", "quantite_1": "1", "prix_unitaire_ht_1": "874.50"},
+        data={
+            "objet": "Freinage",
+            "designation_1": "PLAQUETTE DE FREIN",
+            "quantite_1": "1",
+            "prix_unitaire_ht_1": "874.50",
+            "designation_2": "Main d'oeuvre",
+            "quantite_2": "1",
+            "prix_unitaire_ht_2": "125.50",
+        },
     )
     with app.app_context():
         devis_id = db.session.get(DossierReparation, dossier_id).dernier_devis.id
@@ -1310,9 +1319,14 @@ def test_export_facture_sntl_ajoute_commission(client, app):
     devis_values = [cell.value for row in devis_ws.iter_rows() for cell in row if cell.value is not None]
     assert devis_ws["C4"].value == "DEVIS SNTL"
     assert "ETAT" not in devis_values
-    assert "ICE-SNTL-001" in devis_values
-    assert devis_ws["E21"].value == "QTE"
+    assert devis_ws["A7"].value == "Partenaire"
+    assert devis_ws["C7"].value == "Véhicule"
+    assert devis_ws["B15"].value == "003524622000063"
+    assert devis_ws["D8"].value == "J207789"
+    assert devis_ws["D12"].value == "260429000021"
+    assert devis_ws["E21"].value == "Quantité"
     assert devis_ws["E22"].value == 1
+    assert devis_ws["B22"].value == "PLAQUETTE DE FREIN"
     client.post(f"/dossiers/devis/{devis_id}/approuver", data={"mode_accord": "telephone"})
     client.post(f"/dossiers/{dossier_id}/terminer")
     client.post(f"/factures/dossiers/{dossier_id}/generer")
@@ -1324,17 +1338,47 @@ def test_export_facture_sntl_ajoute_commission(client, app):
     assert response.status_code == 200
     wb = load_workbook(BytesIO(response.data), data_only=False)
     ws = wb.active
+    assert ws["C1"].value == "MONSTER GARAGE"
     assert ws["C4"].value == "FACTURE SNTL"
+    assert ws["A7"].value == "Partenaire"
+    assert ws["C7"].value == "Véhicule"
+    assert ws["A8"].value == "N° Agrément SNTL"
+    assert ws["B8"].value == "3108"
+    assert ws["A15"].value == "ICE"
+    assert ws["B15"].value == "003524622000063"
+    assert ws["C8"].value == "Matricule"
+    assert ws["D8"].value == "J207789"
+    assert ws["C9"].value == "Marque et modèle"
+    assert ws["D9"].value == "FORD TRANSIT"
+    assert ws["C11"].value == "Administration"
+    assert ws["D11"].value == "COMMUNE HARBIL"
+    assert ws["D12"].value == "260429000021"
     assert ws.freeze_panes is None
-    assert ws["E22"].number_format == "0.##"
     values = [cell.value for row in ws.iter_rows() for cell in row if cell.value]
     assert "ETAT" not in values
-    assert "ICE-SNTL-001" in values
-    assert ws["E21"].value == "QTE"
-    assert "Commission SNTL 10%" in values
-    assert "Montant net a regler" in values
+    assert "ICE-SNTL-001" not in values
+    assert ws["A21"].value == "Référence article"
+    assert ws["B21"].value == "Désignation Article"
+    assert ws["E21"].value == "Quantité"
+    assert ws["F21"].value == "PU HT"
+    assert ws["G21"].value == "Total HT"
+    assert ws["A22"].value == "REF - N001"
+    assert ws["B22"].value == "PLAQUETTE DE FREIN"
+    assert ws["E22"].value == 1
+    assert ws["F22"].value == 874.5
+    assert ws["G22"].value == 874.5
+    assert ws["A33"].value == "Main d'œuvre*"
+    assert ws["G33"].value == 125.5
+    assert ws["G34"].value == 1000
+    assert ws["G35"].value == 200
+    assert ws["G36"].value == 1200
+    assert ws["G37"].value == 100
+    assert ws["G38"].value == 20
+    assert ws["G39"].value == 1080
+    assert "Commission SNTL (1x10%) (4)" in values
+    assert "Montant Net à régler (3-4-5)" in values
     assert 874.5 in values
-    assert 174.9 in values
+    assert 200 in values
 
 
 def test_export_releve_client_excel(client, app):
@@ -1344,6 +1388,33 @@ def test_export_releve_client_excel(client, app):
     with app.app_context():
         facture = FactureReparation.query.first()
         client_id = facture.dossier.client_id
+
+    client.post(
+        "/dossiers/nouveau",
+        data={
+            "mode_client": "existant",
+            "mode_vehicule": "nouveau",
+            "client_id": str(client_id),
+            "vehicule_immatriculation": "2222-A-6",
+            "vehicule_marque": "Renault",
+            "vehicule_modele": "Master",
+            "demande_client": "Deuxieme vehicule",
+            "diagnostic_initial": "",
+            "kilometrage_entree": "70000",
+            "notes": "",
+        },
+    )
+    with app.app_context():
+        second_dossier_id = DossierReparation.query.order_by(DossierReparation.id.desc()).first().id
+    client.post(
+        f"/dossiers/{second_dossier_id}/devis/nouveau",
+        data={"objet": "Deuxieme facture", "designation_1": "Revision", "quantite_1": "1", "prix_unitaire_ht_1": "300"},
+    )
+    with app.app_context():
+        second_devis_id = db.session.get(DossierReparation, second_dossier_id).dernier_devis.id
+    client.post(f"/dossiers/devis/{second_devis_id}/approuver", data={"mode_accord": "telephone"})
+    client.post(f"/dossiers/{second_dossier_id}/terminer")
+    client.post(f"/factures/dossiers/{second_dossier_id}/generer")
 
     response = client.get(f"/factures/clients/{client_id}/releve")
 
@@ -1355,6 +1426,20 @@ def test_export_releve_client_excel(client, app):
     assert ws.freeze_panes is None
     assert ws["F10"].value == "=D10-E10"
     assert any(cell.value == "TOTAL" for row in ws.iter_rows() for cell in row)
+    assert "RESUME VEHICULES" in wb.sheetnames
+    resume = wb["RESUME VEHICULES"]
+    assert resume["A7"].value == "VEHICULE"
+    assert resume["B7"].value == "IMMATRICULATION"
+    assert resume["A8"].value == "Toyota Hilux"
+    assert resume["B8"].value == "1111-F-6"
+    assert resume["C8"].value == 1
+    assert resume["D8"].value == 240
+    assert resume["F8"].value == 240
+    assert resume["A9"].value == "Renault Master"
+    assert resume["B9"].value == "2222-A-6"
+    assert resume["C9"].value == 1
+    assert resume["D9"].value == 360
+    assert resume["F9"].value == 360
 
 
 def _classeur_salaires(lignes):

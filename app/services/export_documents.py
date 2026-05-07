@@ -32,16 +32,21 @@ def exporter_devis_excel(devis: DevisReparation) -> bytes:
     wb = Workbook()
     ws = wb.active
     ws.title = f"DEVIS V{devis.version}"
-    _document_setup(ws)
     is_sntl = devis.dossier.client.type == "sntl"
+    if is_sntl:
+        _document_setup_sntl(ws)
+        _build_devis_sntl(ws, devis)
+        return _save(wb)
+
+    _document_setup(ws)
     _build_document_reparation(
         ws,
-        titre="DEVIS SNTL" if is_sntl else "DEVIS DE REPARATION",
+        titre="DEVIS DE REPARATION",
         numero=f"{devis.dossier.numero}-V{devis.version}",
         date_document=devis.created_at,
         devis=devis,
         statut=devis.statut_libelle,
-        hide_etat=is_sntl,
+        hide_etat=False,
         include_commission_sntl=False,
     )
     return _save(wb)
@@ -51,21 +56,12 @@ def exporter_facture_excel(facture: FactureReparation) -> bytes:
     wb = Workbook()
     ws = wb.active
     ws.title = _safe_sheet_title(facture.numero)
-    _document_setup(ws)
 
     if facture.dossier.client.type == "sntl":
-        _build_document_reparation(
-            ws,
-            titre="FACTURE SNTL",
-            numero=facture.numero,
-            date_document=facture.created_at,
-            devis=facture.devis,
-            statut=facture.statut_libelle,
-            montant_regle=facture.montant_regle,
-            hide_etat=True,
-            include_commission_sntl=True,
-        )
+        _document_setup_sntl(ws)
+        _build_facture_sntl(ws, facture)
     else:
+        _document_setup(ws)
         _build_document_reparation(
             ws,
             titre="FACTURE",
@@ -132,6 +128,7 @@ def exporter_releve_client_excel(client: Client, factures: list[FactureReparatio
         cell.number_format = '#,##0.00 "MAD"'
 
     _set_print_options(ws)
+    _build_resume_vehicules(wb, client, factures)
     return _save(wb)
 
 
@@ -146,6 +143,215 @@ def nom_fichier_facture(facture: FactureReparation) -> str:
 
 def nom_fichier_releve_client(client: Client) -> str:
     return _safe_filename(f"RELEVE_SITUATION_{client.nom}.xlsx")
+
+
+def _build_resume_vehicules(wb: Workbook, client: Client, factures: list[FactureReparation]) -> None:
+    ws = wb.create_sheet("RESUME VEHICULES")
+    _document_setup(ws, widths=[28, 22, 16, 18, 18, 18, 18])
+    _build_header(ws, f"RESUME VEHICULES - {client.nom.upper()}", client.type_libelle.upper(), date.today())
+
+    headers = ["VEHICULE", "IMMATRICULATION", "NB FACTURES", "MONTANT FACTURE", "ENCAISSE", "A ENCAISSER", "DERNIERE FACTURE"]
+    header_row = 7
+    for col, value in enumerate(headers, 1):
+        cell = ws.cell(header_row, col, value)
+        cell.fill = _fill(_SLATE_950)
+        cell.font = _font(bold=True, color=_BLANC)
+        cell.alignment = _align("center", wrap=True)
+        cell.border = _border()
+
+    grouped = {}
+    for facture in factures:
+        vehicule = facture.dossier.vehicule
+        key = vehicule.id
+        current = grouped.setdefault(
+            key,
+            {
+                "vehicule": f"{vehicule.marque} {vehicule.modele}",
+                "immatriculation": vehicule.immatriculation,
+                "count": 0,
+                "montant": Decimal("0.00"),
+                "encaisse": Decimal("0.00"),
+                "last": None,
+            },
+        )
+        current["count"] += 1
+        current["montant"] += Decimal(str(facture.montant_ttc or 0))
+        current["encaisse"] += Decimal(str(facture.montant_regle or 0))
+        last_date = _date_value(facture.created_at)
+        if current["last"] is None or last_date > current["last"]:
+            current["last"] = last_date
+
+    first_row = header_row + 1
+    for row, item in enumerate(grouped.values(), first_row):
+        reste = item["montant"] - item["encaisse"]
+        values = [
+            item["vehicule"],
+            item["immatriculation"],
+            item["count"],
+            _money(item["montant"]),
+            _money(item["encaisse"]),
+            _money(reste),
+            item["last"],
+        ]
+        for col, value in enumerate(values, 1):
+            cell = ws.cell(row, col, value)
+            cell.border = _border("FFCBD5E1")
+            cell.alignment = _align("center" if col != 1 else "left", wrap=True)
+            if col in {4, 5, 6}:
+                cell.number_format = '#,##0.00 "MAD"'
+            if col == 7:
+                cell.number_format = "dd/mm/yyyy"
+
+    total_row = max(first_row, first_row + len(grouped)) + 1
+    ws.cell(total_row, 2, "TOTAL").font = _font(bold=True, size=12)
+    for col in (3, 4, 5, 6):
+        cell = ws.cell(total_row, col, f"=SUM({get_column_letter(col)}{first_row}:{get_column_letter(col)}{total_row - 1})")
+        cell.font = _font(bold=True, size=12)
+        cell.fill = _fill(_AMBRE_PALE)
+        cell.border = _border()
+        if col in {4, 5, 6}:
+            cell.number_format = '#,##0.00 "MAD"'
+
+    _set_print_options(ws)
+
+
+def _build_devis_sntl(ws, devis: DevisReparation) -> None:
+    _build_sntl_official_document(
+        ws,
+        devis=devis,
+        titre="DEVIS SNTL",
+        numero=f"{devis.dossier.numero}-V{devis.version}",
+        date_document=devis.created_at,
+        include_commission=False,
+    )
+
+
+def _build_facture_sntl(ws, facture: FactureReparation) -> None:
+    _build_sntl_official_document(
+        ws,
+        devis=facture.devis,
+        titre="FACTURE SNTL",
+        numero=facture.numero,
+        date_document=facture.created_at,
+        include_commission=True,
+    )
+
+
+def _build_sntl_official_document(
+    ws,
+    *,
+    devis: DevisReparation,
+    titre: str,
+    numero: str,
+    date_document,
+    include_commission: bool,
+) -> None:
+    dossier = devis.dossier
+    client = dossier.client
+    vehicule = dossier.vehicule
+    entreprise = obtenir_entreprise()
+    tva = _param_percent("taux_tva", Decimal("20"))
+    commission = _param_percent("taux_commission_sntl", Decimal("10"))
+    row_offset = 5
+
+    _build_header(ws, titre, numero, date_document)
+
+    _sntl_section_header(ws, f"A{2 + row_offset}:B{2 + row_offset}", "Partenaire")
+    _sntl_section_header(ws, f"C{2 + row_offset}:D{2 + row_offset}", "Véhicule")
+    _sntl_section_header(ws, f"E{2 + row_offset}:G{2 + row_offset}", "Partenaire")
+
+    partenaire_rows = [
+        ("N° Agrément SNTL", entreprise.agrement_sntl),
+        ("Raison Sociale", entreprise.raison_sociale),
+        ("Adresse", entreprise.adresse),
+        ("Ville", entreprise.ville),
+        ("RC", entreprise.rc),
+        ("Patente", entreprise.patente),
+        ("IF", entreprise.if_fiscal),
+        ("ICE", entreprise.ice),
+        ("N° RIB", entreprise.rib),
+    ]
+    for row, (label, value) in enumerate(partenaire_rows, 3 + row_offset):
+        _sntl_label_value(ws, row, 1, label, value)
+
+    vehicle_rows = [
+        ("Matricule", vehicule.immatriculation),
+        ("Marque et modèle", f"{vehicule.marque} {vehicule.modele}".upper()),
+        ("Kilométrage", dossier.kilometrage_entree or vehicule.kilometrage_actuel),
+        ("Administration", (client.administration_rattachee or client.nom).upper()),
+        ("N° de bon", _sntl_bon_number(dossier, client)),
+    ]
+    for row, (label, value) in enumerate(vehicle_rows, 3 + row_offset):
+        _sntl_label_value(ws, row, 3, label, value)
+
+    _sntl_label_value(ws, 3 + row_offset, 5, "N° Accord SNTL", "")
+    ws.merge_cells(f"F{3 + row_offset}:G{3 + row_offset}")
+    _style_range(ws, 3 + row_offset, 5, 3 + row_offset, 7, border=_border())
+
+    article_lines, labor_total = _split_sntl_lines(devis.lignes)
+    article_start = 17 + row_offset
+    min_article_rows = 10
+    article_rows_count = max(min_article_rows, len(article_lines))
+    table_header_row = article_start - 1
+    headers = ["Référence article", "Désignation Article", "Quantité", "PU HT", "Total HT"]
+    columns = [1, 2, 5, 6, 7]
+    for col, header in zip(columns, headers):
+        cell = ws.cell(table_header_row, col, header)
+        cell.font = _font(bold=False)
+        cell.alignment = _align("center")
+        cell.border = _border()
+    ws.merge_cells(start_row=table_header_row, start_column=2, end_row=table_header_row, end_column=4)
+
+    article_total = Decimal("0.00")
+    for offset in range(article_rows_count):
+        row = article_start + offset
+        for col in range(1, 8):
+            ws.cell(row, col).border = _border()
+            ws.cell(row, col).alignment = _align("center", wrap=True)
+        ws.merge_cells(start_row=row, start_column=2, end_row=row, end_column=4)
+        if offset >= len(article_lines):
+            continue
+        ligne = article_lines[offset]
+        article_total += Decimal(str(ligne.total_ht or 0))
+        ws.cell(row, 1, f"REF - N{offset + 1:03d}")
+        ws.cell(row, 2, ligne.designation.upper())
+        ws.cell(row, 5, _money(ligne.quantite))
+        ws.cell(row, 6, _money(ligne.prix_unitaire_ht))
+        ws.cell(row, 7, _money(ligne.total_ht))
+        ws.cell(row, 5).number_format = "0.##"
+        ws.cell(row, 6).number_format = '#,##0.00'
+        ws.cell(row, 7).number_format = '#,##0.00'
+
+    totals_start = article_start + article_rows_count
+    total_ht = (article_total + labor_total).quantize(Decimal("0.01"))
+    montant_tva = (total_ht * tva).quantize(Decimal("0.01"))
+    montant_ttc = (total_ht + montant_tva).quantize(Decimal("0.01"))
+    commission_sntl = (total_ht * commission).quantize(Decimal("0.01"))
+    tva_commission = (commission_sntl * tva).quantize(Decimal("0.01"))
+    net_a_regler = (montant_ttc - commission_sntl - tva_commission).quantize(Decimal("0.01"))
+
+    _sntl_total_row(ws, totals_start, "Montant Total article HT", article_total)
+    _sntl_total_row(ws, totals_start + 1, "Main d'œuvre*", labor_total)
+    _sntl_total_row(ws, totals_start + 2, "Montant Total article HT (1)", total_ht)
+    _sntl_total_row(ws, totals_start + 3, f"TVA {int(tva * 100)}% (2)", montant_tva, rate=f"{int(tva * 100)}%")
+    _sntl_total_row(ws, totals_start + 4, "Montant Total TTC (1+2) (3)", montant_ttc)
+    if include_commission:
+        _sntl_total_row(ws, totals_start + 5, f"Commission SNTL (1x{int(commission * 100)}%) (4)", commission_sntl, rate=f"{int(commission * 100)}%")
+        _sntl_total_row(ws, totals_start + 6, f"TVA {int(tva * 100)}% sur la comission (4x{int(tva * 100)}%) (5)", tva_commission, rate=f"{int(tva * 100)}%")
+        _sntl_total_row(ws, totals_start + 7, "Montant Net à régler (3-4-5)", net_a_regler, bold_value=True)
+
+    phrase_row = totals_start + (10 if include_commission else 7)
+    ws.merge_cells(start_row=phrase_row, start_column=1, end_row=phrase_row, end_column=7)
+    ws.cell(
+        phrase_row,
+        1,
+        f"Arrêté la présente facture à la somme de {_amount_to_french(montant_ttc)} TTC",
+    )
+    ws.cell(phrase_row, 1).alignment = _align("left", wrap=True)
+    ws.cell(phrase_row, 1).font = _font(size=10)
+
+    ws.print_area = f"A1:G{phrase_row + 2}"
+    _set_print_options(ws)
 
 
 def _build_document_reparation(
@@ -400,6 +606,83 @@ def _document_setup(ws, widths=None) -> None:
     ws.page_margins.bottom = 0.35
 
 
+def _document_setup_sntl(ws) -> None:
+    widths = [18, 44, 18, 20, 16, 18, 18, 10]
+    for index, width in enumerate(widths, 1):
+        ws.column_dimensions[get_column_letter(index)].width = width
+    ws.sheet_view.showGridLines = True
+    ws.page_setup.orientation = "portrait"
+    ws.page_setup.fitToWidth = 1
+    ws.page_margins.left = 0.2
+    ws.page_margins.right = 0.2
+    ws.page_margins.top = 0.25
+    ws.page_margins.bottom = 0.25
+
+
+def _sntl_section_header(ws, cell_range: str, title: str) -> None:
+    ws.merge_cells(cell_range)
+    cell = ws[cell_range.split(":")[0]]
+    cell.value = title
+    cell.font = _font(bold=True)
+    cell.alignment = _align("center")
+    for row in ws[cell_range]:
+        for item in row:
+            item.border = _border()
+
+
+def _sntl_label_value(ws, row: int, col: int, label: str, value) -> None:
+    ws.cell(row, col, label)
+    ws.cell(row, col + 1, _display(value))
+    ws.cell(row, col).alignment = _align("left", wrap=True)
+    ws.cell(row, col + 1).alignment = _align("left", wrap=True)
+    ws.cell(row, col + 1).font = _font(bold=True)
+    _style_range(ws, row, col, row, col + 1, border=_border())
+
+
+def _sntl_total_row(ws, row: int, label: str, value, *, rate: str | None = None, bold_value: bool = False) -> None:
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=6)
+    ws.cell(row, 1, label)
+    ws.cell(row, 7, _money(value))
+    ws.cell(row, 1).alignment = _align("right")
+    ws.cell(row, 7).alignment = _align("right")
+    ws.cell(row, 7).number_format = '#,##0.00'
+    if bold_value:
+        ws.cell(row, 7).font = _font(bold=True, color="FF0000FF")
+    if rate:
+        ws.cell(row, 8, rate)
+        ws.cell(row, 8).alignment = _align("center")
+    _style_range(ws, row, 1, row, 7, border=_border())
+
+
+def _split_sntl_lines(lines) -> tuple[list, Decimal]:
+    article_lines = []
+    labor_total = Decimal("0.00")
+    for line in lines:
+        if _is_labor_line(line.designation):
+            labor_total += Decimal(str(line.total_ht or 0))
+        else:
+            article_lines.append(line)
+    return article_lines, labor_total.quantize(Decimal("0.01"))
+
+
+def _is_labor_line(designation: str) -> bool:
+    normalized = (designation or "").lower().replace("œ", "oe")
+    return "main" in normalized and ("oeuvre" in normalized or "d'oeuvre" in normalized or "d oeuvre" in normalized)
+
+
+def _sntl_bon_number(dossier, client) -> str:
+    if getattr(dossier, "numero_bon_sntl", None):
+        return dossier.numero_bon_sntl
+
+    candidates = [dossier.notes, client.notes, dossier.numero]
+    for candidate in candidates:
+        text = str(candidate or "")
+        match = re.search(r"(?:bon|or|ordre|n[°o])\D*(\d[\d\s-]*)", text, flags=re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+    return dossier.numero
+
+
 def _label_value(ws, row: int, col: int, label: str, value, *, width: int) -> None:
     ws.cell(row, col, label)
     ws.cell(row, col + 1, _display(value))
@@ -478,6 +761,90 @@ def _join_parts(*parts, sep=", ") -> str:
 
 def _arrete(amount: float) -> str:
     return f"Arrete le present document a la somme de {amount:,.2f} dirhams TTC.".replace(",", " ")
+
+
+def _amount_to_french(amount: Decimal) -> str:
+    amount = Decimal(str(amount or 0)).quantize(Decimal("0.01"))
+    dirhams = int(amount)
+    centimes = int((amount - Decimal(dirhams)) * 100)
+    words = f"{_number_to_french(dirhams)} dirhams"
+    if centimes:
+        words += f" et {_number_to_french(centimes)} centimes"
+    return words
+
+
+def _number_to_french(number: int) -> str:
+    if number == 0:
+        return "zero"
+
+    units = [
+        "",
+        "un",
+        "deux",
+        "trois",
+        "quatre",
+        "cinq",
+        "six",
+        "sept",
+        "huit",
+        "neuf",
+        "dix",
+        "onze",
+        "douze",
+        "treize",
+        "quatorze",
+        "quinze",
+        "seize",
+    ]
+    tens = {
+        20: "vingt",
+        30: "trente",
+        40: "quarante",
+        50: "cinquante",
+        60: "soixante",
+    }
+
+    def below_hundred(value: int) -> str:
+        if value < 17:
+            return units[value]
+        if value < 20:
+            return f"dix {units[value - 10]}"
+        if value < 70:
+            ten = (value // 10) * 10
+            rest = value % 10
+            if rest == 0:
+                return tens[ten]
+            sep = " et " if rest == 1 else " "
+            return f"{tens[ten]}{sep}{units[rest]}"
+        if value < 80:
+            rest = value - 60
+            sep = " et " if rest == 11 else " "
+            return f"soixante{sep}{below_hundred(rest)}"
+        rest = value - 80
+        if rest == 0:
+            return "quatre vingt"
+        return f"quatre vingt {below_hundred(rest)}"
+
+    def below_thousand(value: int) -> str:
+        if value < 100:
+            return below_hundred(value)
+        hundred = value // 100
+        rest = value % 100
+        prefix = "cent" if hundred == 1 else f"{units[hundred]} cent"
+        return prefix if rest == 0 else f"{prefix} {below_hundred(rest)}"
+
+    chunks = []
+    millions = number // 1_000_000
+    if millions:
+        chunks.append(("un million" if millions == 1 else f"{below_thousand(millions)} millions"))
+        number %= 1_000_000
+    thousands = number // 1000
+    if thousands:
+        chunks.append("mille" if thousands == 1 else f"{below_thousand(thousands)} mille")
+        number %= 1000
+    if number:
+        chunks.append(below_thousand(number))
+    return " ".join(chunks)
 
 
 def _safe_sheet_title(value: str) -> str:

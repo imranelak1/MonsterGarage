@@ -82,6 +82,7 @@ def nouveau():
             demande_client=demande_client,
             diagnostic_initial=request.form.get("diagnostic_initial", "").strip(),
             assurance_nom=request.form.get("assurance_nom", "").strip() if client.type == "particulier" else "",
+            numero_bon_sntl=request.form.get("numero_bon_sntl", "").strip(),
             kilometrage_entree=_int_ou_none(request.form.get("kilometrage_entree")),
             notes=request.form.get("notes", "").strip(),
         )
