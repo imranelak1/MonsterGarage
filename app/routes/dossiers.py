@@ -5,6 +5,7 @@ from app.extensions import db
 from app.models import Client, DevisReparation, DossierReparation, Vehicule
 from app.services.dossiers import (
     RegleMetierErreur,
+    annuler_dossier_facturable,
     annuler_dossier,
     approuver_devis,
     creer_devis,
@@ -12,9 +13,11 @@ from app.services.dossiers import (
     journaliser,
     mettre_en_pause,
     refuser_devis,
+    rouvrir_garantie,
     terminer_dossier,
 )
 from app.services.export_documents import XLSX_MIMETYPE, exporter_devis_excel, nom_fichier_devis
+from app.services.export_pdf import PDF_MIMETYPE, exporter_devis_pdf, nom_fichier_devis_pdf
 from app.services.telephone import normaliser_telephone
 
 bp = Blueprint("dossiers", __name__, url_prefix="/dossiers")
@@ -195,6 +198,18 @@ def telecharger_devis(devis_id):
     )
 
 
+@bp.route("/devis/<int:devis_id>/pdf")
+@login_required
+def voir_devis_pdf(devis_id):
+    return _reponse_devis_pdf(devis_id, telechargement=False)
+
+
+@bp.route("/devis/<int:devis_id>/pdf/telecharger")
+@login_required
+def telecharger_devis_pdf(devis_id):
+    return _reponse_devis_pdf(devis_id, telechargement=True)
+
+
 @bp.route("/<int:dossier_id>/pause", methods=["POST"])
 @login_required
 def pause(dossier_id):
@@ -249,11 +264,62 @@ def annuler(dossier_id):
     return redirect(url_for("dossiers.detail", dossier_id=dossier.id))
 
 
+@bp.route("/<int:dossier_id>/annuler-facturable", methods=["POST"])
+@login_required
+def annuler_facturable(dossier_id):
+    dossier = _obtenir_dossier(dossier_id)
+    if not dossier:
+        return redirect(url_for("dossiers.liste"))
+
+    try:
+        annuler_dossier_facturable(dossier, request.form.get("motif", ""))
+        db.session.commit()
+        flash("Dossier annulÃ© avec facturation des travaux effectuÃ©s.", "warning")
+    except RegleMetierErreur as erreur:
+        db.session.rollback()
+        flash(str(erreur), "danger")
+
+    return redirect(url_for("dossiers.detail", dossier_id=dossier.id))
+
+
+@bp.route("/<int:dossier_id>/garantie/reouvrir", methods=["POST"])
+@login_required
+def reouvrir_garantie(dossier_id):
+    dossier = _obtenir_dossier(dossier_id)
+    if not dossier:
+        return redirect(url_for("dossiers.liste"))
+
+    try:
+        rouvrir_garantie(dossier, request.form.get("motif", ""))
+        db.session.commit()
+        flash("Reprise garantie ouverte sur le mÃªme dossier.", "success")
+    except RegleMetierErreur as erreur:
+        db.session.rollback()
+        flash(str(erreur), "danger")
+
+    return redirect(url_for("dossiers.detail", dossier_id=dossier.id))
+
+
 def _obtenir_dossier(dossier_id: int):
     dossier = db.session.get(DossierReparation, dossier_id)
     if not dossier:
         flash("Dossier atelier introuvable.", "warning")
     return dossier
+
+
+def _reponse_devis_pdf(devis_id: int, *, telechargement: bool):
+    devis = db.session.get(DevisReparation, devis_id)
+    if not devis:
+        flash("Devis introuvable.", "warning")
+        return redirect(url_for("dossiers.liste"))
+
+    filename = nom_fichier_devis_pdf(devis)
+    disposition = "attachment" if telechargement else "inline"
+    return Response(
+        exporter_devis_pdf(devis),
+        mimetype=PDF_MIMETYPE,
+        headers={"Content-Disposition": f'{disposition}; filename="{filename}"'},
+    )
 
 
 def _lignes_devis_depuis_formulaire(dossier: DossierReparation) -> list[dict]:

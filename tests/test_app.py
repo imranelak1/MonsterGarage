@@ -1114,6 +1114,123 @@ def test_facture_ne_peut_pas_etre_generee_avant_fin_reparation(client, app):
         assert FactureReparation.query.first() is None
 
 
+def test_accord_devis_accepte_signature(client, app):
+    connecter(client)
+    client_id, vehicule_id = creer_client_vehicule(app)
+    client.post(
+        "/dossiers/nouveau",
+        data={"mode_client": "existant", "mode_vehicule": "existant", "client_id": client_id, "vehicule_id": vehicule_id, "demande_client": "Accord signe", "diagnostic_initial": "", "kilometrage_entree": "", "notes": ""},
+    )
+    with app.app_context():
+        dossier_id = DossierReparation.query.first().id
+
+    client.post(
+        f"/dossiers/{dossier_id}/devis/nouveau",
+        data={"objet": "Accord signe", "designation_1": "Diagnostic", "quantite_1": "1", "prix_unitaire_ht_1": "150"},
+    )
+    with app.app_context():
+        devis_id = DossierReparation.query.first().dernier_devis.id
+
+    response = client.post(f"/dossiers/devis/{devis_id}/approuver", data={"mode_accord": "signature"})
+
+    assert response.status_code == 302
+    with app.app_context():
+        devis = db.session.get(DevisReparation, devis_id)
+        dossier = db.session.get(DossierReparation, dossier_id)
+        assert devis.mode_accord == "signature"
+        assert dossier.statut == "in_progress"
+
+
+def test_annulation_facturable_genere_facture_travaux_effectues(client, app):
+    connecter(client)
+    client_id, vehicule_id = creer_client_vehicule(app)
+    client.post(
+        "/dossiers/nouveau",
+        data={"mode_client": "existant", "mode_vehicule": "existant", "client_id": client_id, "vehicule_id": vehicule_id, "demande_client": "Client annule apres diagnostic", "diagnostic_initial": "", "kilometrage_entree": "", "notes": ""},
+    )
+    with app.app_context():
+        dossier_id = DossierReparation.query.first().id
+
+    client.post(
+        f"/dossiers/{dossier_id}/devis/nouveau",
+        data={"objet": "Travaux effectues", "designation_1": "Diagnostic realise", "quantite_1": "1", "prix_unitaire_ht_1": "200"},
+    )
+    with app.app_context():
+        devis_id = DossierReparation.query.first().dernier_devis.id
+    client.post(f"/dossiers/devis/{devis_id}/approuver", data={"mode_accord": "telephone"})
+
+    response = client.post(f"/dossiers/{dossier_id}/annuler-facturable", data={"motif": "Client stoppe la reparation"})
+    assert response.status_code == 302
+    with app.app_context():
+        dossier = db.session.get(DossierReparation, dossier_id)
+        assert dossier.statut == "cancelled_billable"
+
+    response = client.post(f"/factures/dossiers/{dossier_id}/generer")
+
+    assert response.status_code == 302
+    with app.app_context():
+        facture = FactureReparation.query.first()
+        assert facture is not None
+        assert str(facture.montant_ttc) == "240.00"
+        assert facture.dossier.statut == "cancelled_billable"
+
+
+def test_annulation_facturable_exige_devis_approuve(client, app):
+    connecter(client)
+    client_id, vehicule_id = creer_client_vehicule(app)
+    client.post(
+        "/dossiers/nouveau",
+        data={"mode_client": "existant", "mode_vehicule": "existant", "client_id": client_id, "vehicule_id": vehicule_id, "demande_client": "Annulation sans travaux chiffres", "diagnostic_initial": "", "kilometrage_entree": "", "notes": ""},
+    )
+    with app.app_context():
+        dossier_id = DossierReparation.query.first().id
+
+    response = client.post(
+        f"/dossiers/{dossier_id}/annuler-facturable",
+        data={"motif": "Aucun devis approuve"},
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert b"devis limite aux travaux effectues" in response.data
+    with app.app_context():
+        dossier = db.session.get(DossierReparation, dossier_id)
+        assert dossier.statut == "pending_devis"
+        assert FactureReparation.query.first() is None
+
+
+def test_reprise_garantie_continue_meme_dossier_apres_facture(client, app):
+    connecter(client)
+    dossier_id = creer_dossier_termine(client, app)
+    client.post(f"/factures/dossiers/{dossier_id}/generer")
+    with app.app_context():
+        facture_id = FactureReparation.query.first().id
+    client.post(f"/factures/{facture_id}/livrer")
+    client.post(
+        f"/factures/{facture_id}/regler",
+        data={"mode_reglement": "virement", "montant_reglement": "240", "reference_reglement": "GAR-001"},
+    )
+
+    response = client.post(
+        f"/dossiers/{dossier_id}/garantie/reouvrir",
+        data={"motif": "Retour client sous garantie"},
+    )
+
+    assert response.status_code == 302
+    with app.app_context():
+        dossier = db.session.get(DossierReparation, dossier_id)
+        assert dossier.statut == "in_progress"
+        assert dossier.facture.id == facture_id
+        assert FactureReparation.query.count() == 1
+        assert any(action.action == "reprise_garantie" for action in dossier.journal)
+
+    client.post(f"/dossiers/{dossier_id}/terminer")
+    with app.app_context():
+        dossier = db.session.get(DossierReparation, dossier_id)
+        assert dossier.statut == "completed"
+        assert FactureReparation.query.count() == 1
+
+
 def test_facture_livraison_puis_reglement(client, app):
     connecter(client)
     dossier_id = creer_dossier_termine(client, app)
@@ -1236,6 +1353,28 @@ def test_export_devis_excel_depuis_dossier(client, app):
     assert any(isinstance(cell.value, str) and "final" in cell.value for row in ws.iter_rows() for cell in row)
 
 
+def test_export_devis_pdf_vue_et_telechargement(client, app):
+    connecter(client)
+    dossier_id = creer_dossier_termine(client, app)
+    with app.app_context():
+        devis_id = db.session.get(DossierReparation, dossier_id).dernier_devis.id
+
+    response = client.get(f"/dossiers/devis/{devis_id}/pdf")
+
+    assert response.status_code == 200
+    assert response.mimetype == "application/pdf"
+    assert response.headers["Content-Disposition"].startswith("inline;")
+    assert response.data.startswith(b"%PDF")
+    assert b"MONSTER GARAGE" in response.data
+
+    download = client.get(f"/dossiers/devis/{devis_id}/pdf/telecharger")
+
+    assert download.status_code == 200
+    assert download.mimetype == "application/pdf"
+    assert download.headers["Content-Disposition"].startswith("attachment;")
+    assert ".pdf" in download.headers["Content-Disposition"]
+
+
 def test_export_facture_particulier_excel(client, app):
     connecter(client)
     dossier_id = creer_dossier_termine(client, app)
@@ -1258,6 +1397,34 @@ def test_export_facture_particulier_excel(client, app):
     assert ws["G27"].value == 0
     assert ws["G28"].value == 240
     assert any(cell.value == "Montant TTC" for row in ws.iter_rows() for cell in row)
+
+
+def test_export_facture_pdf_vue_et_telechargement(client, app):
+    connecter(client)
+    dossier_id = creer_dossier_termine(client, app)
+    client.post(f"/factures/dossiers/{dossier_id}/generer")
+    with app.app_context():
+        facture_id = FactureReparation.query.first().id
+
+    detail = client.get(f"/factures/{facture_id}")
+    assert detail.status_code == 200
+    assert b"Exporter Excel" in detail.data
+    assert b"Voir PDF" in detail.data
+
+    response = client.get(f"/factures/{facture_id}/pdf")
+
+    assert response.status_code == 200
+    assert response.mimetype == "application/pdf"
+    assert response.headers["Content-Disposition"].startswith("inline;")
+    assert response.data.startswith(b"%PDF")
+    assert b"FACTURE" in response.data
+
+    download = client.get(f"/factures/{facture_id}/pdf/telecharger")
+
+    assert download.status_code == 200
+    assert download.mimetype == "application/pdf"
+    assert download.headers["Content-Disposition"].startswith("attachment;")
+    assert ".pdf" in download.headers["Content-Disposition"]
 
 
 def test_export_facture_sntl_ajoute_commission(client, app):

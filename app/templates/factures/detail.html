@@ -9,7 +9,9 @@
         <h1 class="mt-1 text-3xl font-black tracking-tight text-slate-950">{{ facture.numero }}</h1>
     </div>
     <div class="flex flex-wrap gap-2">
-        <a class="inline-flex h-10 items-center justify-center rounded-md bg-monster-jaune px-4 text-sm font-black text-black transition hover:bg-yellow-300" href="{{ url_for('factures.telecharger', facture_id=facture.id) }}">Exporter facture</a>
+        <a class="inline-flex h-10 items-center justify-center rounded-md bg-monster-jaune px-4 text-sm font-black text-black transition hover:bg-yellow-300" href="{{ url_for('factures.telecharger', facture_id=facture.id) }}">Exporter Excel</a>
+        <a class="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50" href="{{ url_for('factures.voir_pdf', facture_id=facture.id) }}" target="_blank" rel="noopener">Voir PDF</a>
+        <a class="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50" href="{{ url_for('factures.telecharger_pdf', facture_id=facture.id) }}">Télécharger PDF</a>
         <a class="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50" href="{{ url_for('factures.releve_client', client_id=facture.dossier.client_id) }}">Relevé client</a>
         <a class="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50" href="{{ url_for('dossiers.detail', dossier_id=facture.dossier_id) }}">Voir dossier</a>
         <a class="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50" href="{{ url_for('factures.liste') }}">Retour factures</a>

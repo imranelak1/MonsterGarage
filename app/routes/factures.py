@@ -11,6 +11,7 @@ from app.services.export_documents import (
     nom_fichier_facture,
     nom_fichier_releve_client,
 )
+from app.services.export_pdf import PDF_MIMETYPE, exporter_facture_pdf, nom_fichier_facture_pdf
 from app.services.factures import enregistrer_reglement, generer_facture, marquer_livree
 
 bp = Blueprint("factures", __name__, url_prefix="/factures")
@@ -52,6 +53,18 @@ def telecharger(facture_id):
         mimetype=XLSX_MIMETYPE,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@bp.route("/<int:facture_id>/pdf")
+@login_required
+def voir_pdf(facture_id):
+    return _reponse_facture_pdf(facture_id, telechargement=False)
+
+
+@bp.route("/<int:facture_id>/pdf/telecharger")
+@login_required
+def telecharger_pdf(facture_id):
+    return _reponse_facture_pdf(facture_id, telechargement=True)
 
 
 @bp.route("/clients/<int:client_id>/releve")
@@ -137,3 +150,18 @@ def regler(facture_id):
         flash(str(erreur), "danger")
 
     return redirect(url_for("factures.detail", facture_id=facture.id))
+
+
+def _reponse_facture_pdf(facture_id: int, *, telechargement: bool):
+    facture = db.session.get(FactureReparation, facture_id)
+    if not facture:
+        flash("Facture introuvable.", "warning")
+        return redirect(url_for("factures.liste"))
+
+    filename = nom_fichier_facture_pdf(facture)
+    disposition = "attachment" if telechargement else "inline"
+    return Response(
+        exporter_facture_pdf(facture),
+        mimetype=PDF_MIMETYPE,
+        headers={"Content-Disposition": f'{disposition}; filename="{filename}"'},
+    )

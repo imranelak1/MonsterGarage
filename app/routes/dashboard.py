@@ -22,7 +22,7 @@ GROUPES_FLUX = [
     {
         "titre": "Finition & livraison",
         "sous_titre": "Terminé ou prêt à facturer",
-        "statuts": ["completed"],
+        "statuts": ["completed", "cancelled_billable"],
         "couleur": "green",
     },
 ]
@@ -33,6 +33,7 @@ PROGRESSION_STATUT = {
     "paused_pending_approval": 55,
     "in_progress": 70,
     "completed": 100,
+    "cancelled_billable": 90,
     "cancelled": 0,
 }
 
@@ -42,6 +43,7 @@ BADGES_STATUT = {
     "paused_pending_approval": "bg-orange-50 text-orange-700",
     "in_progress": "bg-yellow-100 text-slate-950",
     "completed": "bg-emerald-50 text-emerald-700",
+    "cancelled_billable": "bg-orange-50 text-orange-700",
     "cancelled": "bg-red-50 text-red-700",
 }
 

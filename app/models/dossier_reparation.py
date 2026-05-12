@@ -19,6 +19,7 @@ class DossierReparation(db.Model):
             "paused_pending_approval",
             "completed",
             "cancelled",
+            "cancelled_billable",
             name="statut_dossier_reparation",
         ),
         default="pending_devis",
@@ -64,8 +65,13 @@ class DossierReparation(db.Model):
             "paused_pending_approval": "En pause - accord requis",
             "completed": "Terminé",
             "cancelled": "Annulé",
+            "cancelled_billable": "Annule - travaux a facturer",
         }
         return statuts.get(self.statut, self.statut)
+
+    @property
+    def est_facturable(self) -> bool:
+        return self.statut in {"completed", "cancelled_billable"}
 
     @property
     def dernier_devis(self):

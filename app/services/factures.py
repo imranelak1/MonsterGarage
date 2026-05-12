@@ -13,8 +13,8 @@ def generer_numero_facture() -> str:
 
 
 def generer_facture(dossier: DossierReparation) -> FactureReparation:
-    if dossier.statut != "completed":
-        raise RegleMetierErreur("La facture finale ne peut etre generee qu'apres la fin de la reparation.")
+    if not dossier.est_facturable:
+        raise RegleMetierErreur("La facture ne peut etre generee qu'apres la fin de la reparation ou une annulation facturable.")
 
     if dossier.facture:
         raise RegleMetierErreur("Une facture existe deja pour ce dossier.")
@@ -34,7 +34,10 @@ def generer_facture(dossier: DossierReparation) -> FactureReparation:
     )
     db.session.add(facture)
     db.session.flush()
-    journaliser(dossier, "facture_emise", f"Facture {facture.numero} generee depuis le devis v{devis.version}.")
+    if dossier.statut == "cancelled_billable":
+        journaliser(dossier, "facture_travaux_effectues", f"Facture {facture.numero} generee pour les travaux effectues depuis le devis v{devis.version}.")
+    else:
+        journaliser(dossier, "facture_emise", f"Facture {facture.numero} generee depuis le devis v{devis.version}.")
     return facture
 
 

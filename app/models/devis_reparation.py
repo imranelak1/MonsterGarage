@@ -15,7 +15,7 @@ class DevisReparation(db.Model):
     montant_tva = db.Column(db.Numeric(12, 2), nullable=False, default=0)
     montant_ttc = db.Column(db.Numeric(12, 2), nullable=False, default=0)
     notes = db.Column(db.Text)
-    mode_accord = db.Column(db.Enum("telephone", "presentiel", "systeme", name="mode_accord_devis"))
+    mode_accord = db.Column(db.Enum("telephone", "signature", "presentiel", "systeme", name="mode_accord_devis"))
     accord_client = db.Column(db.Boolean, default=False, nullable=False)
     accord_assurance = db.Column(db.Boolean, default=False, nullable=False)
     approuve_le = db.Column(db.DateTime)
@@ -45,6 +45,16 @@ class DevisReparation(db.Model):
             "rejected": "Refusé",
         }
         return statuts.get(self.statut, self.statut)
+
+    @property
+    def mode_accord_libelle(self) -> str:
+        modes = {
+            "telephone": "Telephone",
+            "signature": "Signature",
+            "presentiel": "Presentiel",
+            "systeme": "Systeme",
+        }
+        return modes.get(self.mode_accord, self.mode_accord or "-")
 
 
 class LigneDevisReparation(db.Model):

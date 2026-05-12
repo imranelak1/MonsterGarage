@@ -6,6 +6,7 @@ from app.extensions import db
 from app.models import DevisReparation, DossierReparation, JournalAction, LigneDevisReparation
 
 TAUX_TVA_DEFAUT = Decimal("0.20")
+MODES_ACCORD_AUTORISES = {"telephone", "signature", "presentiel", "systeme"}
 
 
 class RegleMetierErreur(ValueError):
@@ -76,6 +77,7 @@ def creer_devis(dossier: DossierReparation, objet: str, lignes_formulaire: list[
 
 def approuver_devis(devis: DevisReparation, mode_accord: str, accord_assurance: bool = False) -> None:
     dossier = devis.dossier
+    mode_accord = mode_accord if mode_accord in MODES_ACCORD_AUTORISES else "telephone"
     if devis != dossier.dernier_devis:
         raise RegleMetierErreur("Seule la dernière version du devis peut être approuvée.")
 
@@ -129,11 +131,41 @@ def terminer_dossier(dossier: DossierReparation) -> None:
 
 
 def annuler_dossier(dossier: DossierReparation, motif: str) -> None:
-    if dossier.statut == "completed":
-        raise RegleMetierErreur("Un dossier terminé ne peut pas être annulé.")
+    if dossier.statut in {"completed", "cancelled_billable"}:
+        raise RegleMetierErreur("Un dossier termine ou deja facturable ne peut pas etre annule simplement.")
 
     dossier.statut = "cancelled"
     journaliser(dossier, "dossier_annule", motif.strip())
+
+
+def annuler_dossier_facturable(dossier: DossierReparation, motif: str) -> None:
+    if dossier.statut in {"completed", "cancelled", "cancelled_billable"}:
+        raise RegleMetierErreur("Ce dossier ne peut plus etre bascule en annulation facturable.")
+
+    if dossier.facture:
+        raise RegleMetierErreur("Une facture existe deja pour ce dossier.")
+
+    if not dossier.dernier_devis_approuve:
+        raise RegleMetierErreur("Creez et approuvez un devis limite aux travaux effectues avant de facturer l'annulation.")
+
+    dossier.statut = "cancelled_billable"
+    journaliser(
+        dossier,
+        "dossier_annule_facturable",
+        motif.strip() or "Reparation annulee, facturation limitee aux travaux effectues.",
+    )
+
+
+def rouvrir_garantie(dossier: DossierReparation, motif: str) -> None:
+    if dossier.statut != "completed" or not dossier.facture:
+        raise RegleMetierErreur("La reprise garantie concerne uniquement un dossier deja facture.")
+
+    dossier.statut = "in_progress"
+    journaliser(
+        dossier,
+        "reprise_garantie",
+        motif.strip() or "Retour client apres facturation finale : reprise sous garantie sur le meme dossier.",
+    )
 
 
 def _normaliser_ligne(ligne: dict) -> dict:
