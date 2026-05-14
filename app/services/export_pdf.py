@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 import re
 import textwrap
 
-from app.models import DevisReparation, FactureReparation
+from app.models import DevisReparation, FactureReparation, ParametreSysteme
 from app.services.parametres import obtenir_entreprise
 
 
@@ -19,9 +19,22 @@ _WHITE = (1, 1, 1)
 _YELLOW = (1, 0.84, 0)
 _SLATE = (0.08, 0.1, 0.16)
 _LIGHT = (0.94, 0.96, 0.98)
+_SNTL_X = {2: 42, 3: 137, 4: 277, 5: 352, 6: 427, 7: 487}
+_SNTL_W = {2: 95, 3: 140, 4: 75, 5: 75, 6: 60, 7: 66}
+_SNTL_RIGHT = _SNTL_X[7] + _SNTL_W[7]
+_SNTL_DESTINATION = "La Société Nationale des Transports et de la Logistique (SNTL)"
 
 
 def exporter_devis_pdf(devis: DevisReparation) -> bytes:
+    if devis.dossier.client.type == "sntl":
+        return _build_sntl_document_pdf(
+            titre="DEVIS SNTL",
+            numero=f"{devis.dossier.numero}-V{devis.version}",
+            date_document=devis.created_at,
+            devis=devis,
+            include_commission=False,
+        )
+
     titre = "DEVIS SNTL" if devis.dossier.client.type == "sntl" else "DEVIS DE REPARATION"
     numero = f"{devis.dossier.numero}-V{devis.version}"
     return _build_document_pdf(
@@ -35,7 +48,13 @@ def exporter_devis_pdf(devis: DevisReparation) -> bytes:
 
 def exporter_facture_pdf(facture: FactureReparation) -> bytes:
     if facture.dossier.client.type == "sntl":
-        titre = "FACTURE SNTL"
+        return _build_sntl_document_pdf(
+            titre="FACTURE SNTL",
+            numero=facture.numero,
+            date_document=facture.created_at,
+            devis=facture.devis,
+            include_commission=True,
+        )
     elif facture.dossier.statut == "cancelled_billable":
         titre = "FACTURE TRAVAUX EFFECTUES"
     else:
@@ -60,6 +79,64 @@ def nom_fichier_facture_pdf(facture: FactureReparation) -> str:
     return _safe_filename(f"{prefix}_{facture.numero}.pdf")
 
 
+def _build_sntl_document_pdf(
+    *,
+    titre: str,
+    numero: str,
+    date_document,
+    devis: DevisReparation,
+    include_commission: bool,
+) -> bytes:
+    pdf = _PdfDocument()
+    ctx = _PageContext(pdf)
+    dossier = devis.dossier
+    client = dossier.client
+    vehicule = dossier.vehicule
+    entreprise = obtenir_entreprise()
+    tva = _param_percent("taux_tva", Decimal("20"))
+    commission = _param_percent("taux_commission_sntl", Decimal("10"))
+
+    _draw_sntl_header(ctx, titre, numero, date_document)
+    _draw_sntl_partner_blocks(ctx, entreprise, dossier, client, vehicule)
+
+    article_lines, labor_total = _split_sntl_lines(devis.lignes)
+    article_rows_count = max(10, len(article_lines))
+    row_height = 13 if article_rows_count <= 10 else (11 if article_rows_count <= 18 else 9)
+    body_size = 7 if article_rows_count <= 18 else 6
+    totals_top, article_total = _draw_sntl_articles(ctx, 445, article_lines, article_rows_count, row_height, body_size)
+
+    total_ht = (article_total + labor_total).quantize(Decimal("0.01"))
+    montant_tva = (total_ht * tva).quantize(Decimal("0.01"))
+    montant_ttc = (total_ht + montant_tva).quantize(Decimal("0.01"))
+    commission_sntl = (total_ht * commission).quantize(Decimal("0.01"))
+    tva_commission = (commission_sntl * tva).quantize(Decimal("0.01"))
+    net_a_regler = (montant_ttc - commission_sntl - tva_commission).quantize(Decimal("0.01"))
+
+    totals = [
+        ("Montant Total article HT", article_total, "wide"),
+        ("Main d'œuvre*", labor_total, "short"),
+        ("Montant Total article HT (1)", total_ht, "wide"),
+        (f"TVA {int(tva * 100)}% (2)", montant_tva, "wide"),
+        ("Montant Total TTC (1+2) (3)", montant_ttc, "wide"),
+    ]
+    if include_commission:
+        totals.extend(
+            [
+                (f"Commission SNTL (1x{int(commission * 100)}%) (4)", commission_sntl, "wide"),
+                (f"TVA {int(tva * 100)}% sur la comission (4x{int(tva * 100)}%) (5)", tva_commission, "wide"),
+                ("Montant Net à régler (3-4-5)", net_a_regler, "wide"),
+            ]
+        )
+
+    next_top = _draw_sntl_totals(ctx, totals_top, totals, row_height)
+    phrase_subject = "la presente facture" if "FACTURE" in titre.upper() else "le present devis"
+    phrase = f"Arrete {phrase_subject} a la somme de {_capitalize(_amount_to_french(montant_ttc))} TTC"
+    ctx.text(_SNTL_X[2], next_top - 18, phrase, size=8)
+    ctx.text(_SNTL_X[5], next_top - 58, "Cachet et signature", size=8)
+    ctx.text(_SNTL_X[2], 56, "* Non valable pour les bons ateliers ''A\"", size=8)
+    return pdf.render()
+
+
 def _build_document_pdf(
     *,
     titre: str,
@@ -75,6 +152,15 @@ def _build_document_pdf(
     client = dossier.client
     vehicule = dossier.vehicule
     entreprise = obtenir_entreprise()
+    dossier_rows = [
+        ("Dossier", dossier.numero),
+        ("Statut", statut),
+        ("Assurance", dossier.assurance_nom),
+    ]
+    if client.type == "sntl":
+        dossier_rows.append(("Bon SNTL", dossier.numero_bon_sntl))
+    elif dossier.numero_bon_sntl:
+        dossier_rows.append(("N de bon", dossier.numero_bon_sntl))
 
     _draw_header(ctx, titre, numero, date_document)
     y = 690
@@ -110,12 +196,7 @@ def _build_document_pdf(
             ("Kilometrage", dossier.kilometrage_entree or vehicule.kilometrage_actuel),
         ],
         right_title="DOSSIER",
-        right_rows=[
-            ("Dossier", dossier.numero),
-            ("Statut", statut),
-            ("Assurance", dossier.assurance_nom),
-            ("Bon SNTL", dossier.numero_bon_sntl),
-        ],
+        right_rows=dossier_rows,
     )
 
     y -= 16
@@ -236,6 +317,181 @@ def _draw_totals(ctx: "_PageContext", y: float, devis: DevisReparation, *, monta
     return y
 
 
+def _draw_sntl_header(ctx: "_PageContext", titre: str, numero: str, date_document) -> None:
+    ctx.text(_SNTL_X[2], 790, "MONSTER GARAGE", size=34, bold=True)
+    ctx.line(_SNTL_X[2], 760, _SNTL_RIGHT, 760)
+
+    is_facture = "FACTURE" in titre.upper()
+    label = "Facture N°" if is_facture else "Devis N°"
+    date_label = "Date facture:" if is_facture else "Date devis:"
+    ctx.text(_SNTL_X[4], 718, label, size=10, bold=True)
+    ctx.text(_SNTL_X[5] + 8, 718, numero, size=10, bold=True)
+    ctx.text(_SNTL_X[6], 718, date_label, size=10, bold=True)
+    ctx.text(_SNTL_X[7], 718, _format_date(date_document), size=10, bold=True)
+    ctx.text(_SNTL_X[4] + 32, 692, "A", size=10)
+    ctx.text(_SNTL_X[3] - 10, 660, _SNTL_DESTINATION, size=12, bold=True)
+
+
+def _draw_sntl_partner_blocks(ctx: "_PageContext", entreprise, dossier, client, vehicule) -> None:
+    top = 628
+    row_height = 13
+    _draw_sntl_cell(ctx, _SNTL_X[2], top, _SNTL_W[2] + _SNTL_W[3], row_height, "Partenaire", bold=True, align="center")
+    _draw_sntl_cell(ctx, _SNTL_X[4], top, _SNTL_W[4] + _SNTL_W[5], row_height, "Véhicule", bold=True, align="center")
+    _draw_sntl_cell(ctx, _SNTL_X[6], top, _SNTL_W[6] + _SNTL_W[7], row_height, "Partenaire", bold=True, align="center")
+
+    partenaire_rows = [
+        ("N° Agrément SNTL", entreprise.agrement_sntl),
+        ("Raison Sociale", entreprise.raison_sociale),
+        ("Adresse", entreprise.adresse),
+        ("Ville", entreprise.ville),
+        ("RC", entreprise.rc),
+        ("Patente", entreprise.patente),
+        ("IF", entreprise.if_fiscal),
+        ("ICE", entreprise.ice),
+        ("N° RIB", entreprise.rib),
+    ]
+    vehicle_rows = [
+        ("Matricule", _format_sntl_matricule(vehicule.immatriculation)),
+        ("Marque et modèle", f"{vehicule.marque} {vehicule.modele}".upper()),
+        ("Kilométrage", dossier.kilometrage_entree or vehicule.kilometrage_actuel),
+        ("Administration", (client.administration_rattachee or client.nom).upper()),
+        ("N° de bon", _sntl_bon_number(dossier, client)),
+    ]
+
+    for index, (label, value) in enumerate(partenaire_rows):
+        row_top = top - row_height * (index + 1)
+        _draw_sntl_cell(ctx, _SNTL_X[2], row_top, _SNTL_W[2], row_height, label, size=7)
+        _draw_sntl_cell(ctx, _SNTL_X[3], row_top, _SNTL_W[3], row_height, value, size=7, bold=True, wrap=True)
+
+    for index, (label, value) in enumerate(vehicle_rows):
+        row_top = top - row_height * (index + 1)
+        _draw_sntl_cell(ctx, _SNTL_X[4], row_top, _SNTL_W[4], row_height, label, size=7)
+        _draw_sntl_cell(ctx, _SNTL_X[5], row_top, _SNTL_W[5], row_height, value, size=7, bold=True, wrap=True)
+
+    _draw_sntl_cell(ctx, _SNTL_X[6], top - row_height, _SNTL_W[6], row_height, "N° Accord SNTL", size=7)
+    _draw_sntl_cell(ctx, _SNTL_X[7], top - row_height, _SNTL_W[7], row_height, "", size=7)
+
+
+def _draw_sntl_articles(
+    ctx: "_PageContext",
+    top: float,
+    article_lines,
+    article_rows_count: int,
+    row_height: float,
+    body_size: float,
+) -> tuple[float, Decimal]:
+    headers = [
+        (_SNTL_X[2], _SNTL_W[2], "Référence article"),
+        (_SNTL_X[3], _SNTL_W[3] + _SNTL_W[4], "Désignation Article"),
+        (_SNTL_X[5], _SNTL_W[5], "Quantité"),
+        (_SNTL_X[6], _SNTL_W[6], "PU HT"),
+        (_SNTL_X[7], _SNTL_W[7], "Total HT"),
+    ]
+    for x, width, label in headers:
+        _draw_sntl_cell(ctx, x, top, width, row_height, label, size=7, align="center")
+
+    article_total = Decimal("0.00")
+    first_row_top = top - row_height
+    for offset in range(article_rows_count):
+        row_top = first_row_top - offset * row_height
+        cells = [
+            (_SNTL_X[2], _SNTL_W[2]),
+            (_SNTL_X[3], _SNTL_W[3] + _SNTL_W[4]),
+            (_SNTL_X[5], _SNTL_W[5]),
+            (_SNTL_X[6], _SNTL_W[6]),
+            (_SNTL_X[7], _SNTL_W[7]),
+        ]
+        for x, width in cells:
+            _draw_sntl_cell(ctx, x, row_top, width, row_height, "", size=body_size)
+        if offset >= len(article_lines):
+            continue
+
+        ligne = article_lines[offset]
+        article_total += Decimal(str(ligne.total_ht or 0))
+        _draw_sntl_cell(ctx, _SNTL_X[2], row_top, _SNTL_W[2], row_height, f"REF - N{offset + 1:03d}", size=body_size, align="center")
+        _draw_sntl_cell(
+            ctx,
+            _SNTL_X[3],
+            row_top,
+            _SNTL_W[3] + _SNTL_W[4],
+            row_height,
+            str(ligne.designation or "").upper(),
+            size=body_size,
+            align="center",
+            wrap=True,
+        )
+        _draw_sntl_cell(ctx, _SNTL_X[5], row_top, _SNTL_W[5], row_height, _number(ligne.quantite), size=body_size, align="center")
+        _draw_sntl_cell(ctx, _SNTL_X[6], row_top, _SNTL_W[6], row_height, _sntl_money(ligne.prix_unitaire_ht), size=body_size, align="center")
+        _draw_sntl_cell(ctx, _SNTL_X[7], row_top, _SNTL_W[7], row_height, _sntl_money(ligne.total_ht), size=body_size, align="center")
+
+    return first_row_top - article_rows_count * row_height, article_total.quantize(Decimal("0.01"))
+
+
+def _draw_sntl_totals(ctx: "_PageContext", top: float, rows: list[tuple[str, Decimal, str]], row_height: float) -> float:
+    for index, (label, value, kind) in enumerate(rows):
+        row_top = top - index * row_height
+        if kind == "short":
+            _draw_sntl_cell(ctx, _SNTL_X[2], row_top, _SNTL_W[2] + _SNTL_W[3] + _SNTL_W[4], row_height, label, size=7, align="center")
+        else:
+            _draw_sntl_cell(ctx, _SNTL_X[2], row_top, _SNTL_X[7] - _SNTL_X[2], row_height, label, size=7, align="right", padding=8)
+        _draw_sntl_cell(ctx, _SNTL_X[7], row_top, _SNTL_W[7], row_height, _sntl_money(value), size=7, bold=True, align="right", padding=6)
+    return top - len(rows) * row_height
+
+
+def _draw_sntl_cell(
+    ctx: "_PageContext",
+    x: float,
+    top: float,
+    width: float,
+    height: float,
+    text: object = "",
+    *,
+    size=7,
+    bold=False,
+    align="left",
+    wrap=False,
+    padding=3,
+) -> None:
+    ctx.rect(x, top - height, width, height, stroke=_BLACK)
+    value = "" if text is None else str(text)
+    if not value:
+        return
+
+    available = max(4, width - padding * 2)
+    fitted_size = _fit_font_size(value, size, available, bold=bold)
+    lines = [value]
+    if wrap and fitted_size <= 5 and _estimated_text_width(value, fitted_size, bold=bold) > available:
+        max_chars = max(4, int(available / max(fitted_size * 0.58, 1)))
+        lines = _wrap(value, max_chars)[:2]
+
+    line_height = min(max(fitted_size + 1.2, 5.4), max(5.4, (height - 2) / max(len(lines), 1)))
+    text_y = top - height + max(2.2, (height - line_height * len(lines)) / 2 + 2)
+    for line_index, line in enumerate(reversed(lines)):
+        text_x = _aligned_text_x(x, width, line, fitted_size, align, bold=bold, padding=padding)
+        ctx.text(text_x, text_y + line_index * line_height, line, size=fitted_size, bold=bold)
+
+
+def _fit_font_size(text: str, preferred_size: float, available_width: float, *, bold: bool = False) -> float:
+    size = preferred_size
+    while size > 4.6 and _estimated_text_width(text, size, bold=bold) > available_width:
+        size -= 0.25
+    return max(4.6, size)
+
+
+def _aligned_text_x(x: float, width: float, text: str, size: float, align: str, *, bold: bool = False, padding: float = 3) -> float:
+    estimated = _estimated_text_width(text, size, bold=bold)
+    if align == "center":
+        return x + max(2, (width - estimated) / 2)
+    if align == "right":
+        return x + max(2, width - estimated - padding)
+    return x + padding
+
+
+def _estimated_text_width(text: str, size: float, *, bold: bool = False) -> float:
+    factor = 0.58 if bold else 0.55
+    return len(str(text)) * size * factor
+
+
 class _PageContext:
     def __init__(self, pdf: "_PdfDocument"):
         self.pdf = pdf
@@ -340,6 +596,11 @@ def _money(value) -> str:
     return f"{amount:,.2f} MAD".replace(",", " ")
 
 
+def _sntl_money(value) -> str:
+    amount = Decimal(str(value or 0)).quantize(Decimal("0.01"))
+    return f"{amount:,.2f}".replace(",", " ")
+
+
 def _number(value) -> str:
     amount = Decimal(str(value or 0)).quantize(Decimal("0.01"))
     return f"{amount.normalize():f}"
@@ -351,6 +612,143 @@ def _join_parts(*parts, sep=", ") -> str:
 
 def _arrete(amount) -> str:
     return f"Arrete le present document a la somme de {_money(amount)} TTC."
+
+
+def _param_percent(cle: str, default: Decimal) -> Decimal:
+    param = ParametreSysteme.query.filter_by(cle=cle).first()
+    raw = param.valeur if param else default
+    try:
+        value = Decimal(str(raw))
+    except (InvalidOperation, ValueError):
+        value = default
+    return (value / Decimal("100")).quantize(Decimal("0.0001"))
+
+
+def _split_sntl_lines(lines) -> tuple[list, Decimal]:
+    article_lines = []
+    labor_total = Decimal("0.00")
+    for line in lines:
+        if _is_labor_line(line.designation):
+            labor_total += Decimal(str(line.total_ht or 0))
+        else:
+            article_lines.append(line)
+    return article_lines, labor_total.quantize(Decimal("0.01"))
+
+
+def _is_labor_line(designation: str) -> bool:
+    normalized = (designation or "").lower().replace("\u0153", "oe").replace("Å“", "oe")
+    return "main" in normalized and ("oeuvre" in normalized or "d'oeuvre" in normalized or "d oeuvre" in normalized)
+
+
+def _format_sntl_matricule(value: object) -> str:
+    raw = str(value or "").strip().upper()
+    compact = re.sub(r"\s+", "", raw)
+    match = re.fullmatch(r"([A-Z])[- ]?(\d+)", compact)
+    if match:
+        letter, number = match.groups()
+        return f"{number.zfill(7)} - {letter}"
+
+    match = re.fullmatch(r"(\d+)[- ]?([A-Z])", compact)
+    if match:
+        number, letter = match.groups()
+        return f"{number.zfill(7)} - {letter}"
+
+    return raw
+
+
+def _sntl_bon_number(dossier, client) -> str:
+    if getattr(dossier, "numero_bon_sntl", None):
+        return dossier.numero_bon_sntl
+
+    candidates = [dossier.notes, client.notes, dossier.numero]
+    for candidate in candidates:
+        text = str(candidate or "")
+        match = re.search(r"(?:bon|or|ordre|n[°o])\D*(\d[\d\s-]*)", text, flags=re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+    return dossier.numero
+
+
+def _amount_to_french(amount: Decimal) -> str:
+    amount = Decimal(str(amount or 0)).quantize(Decimal("0.01"))
+    dirhams = int(amount)
+    centimes = int((amount - Decimal(dirhams)) * 100)
+    words = f"{_number_to_french(dirhams)} dirhams"
+    if centimes:
+        words += f" et {_number_to_french(centimes)} centimes"
+    return words
+
+
+def _number_to_french(number: int) -> str:
+    if number == 0:
+        return "zero"
+
+    units = [
+        "",
+        "un",
+        "deux",
+        "trois",
+        "quatre",
+        "cinq",
+        "six",
+        "sept",
+        "huit",
+        "neuf",
+        "dix",
+        "onze",
+        "douze",
+        "treize",
+        "quatorze",
+        "quinze",
+        "seize",
+    ]
+    tens = {20: "vingt", 30: "trente", 40: "quarante", 50: "cinquante", 60: "soixante"}
+
+    def below_hundred(value: int) -> str:
+        if value < 17:
+            return units[value]
+        if value < 20:
+            return f"dix {units[value - 10]}"
+        if value < 70:
+            ten = (value // 10) * 10
+            rest = value % 10
+            if rest == 0:
+                return tens[ten]
+            sep = " et " if rest == 1 else " "
+            return f"{tens[ten]}{sep}{units[rest]}"
+        if value < 80:
+            rest = value - 60
+            sep = " et " if rest == 11 else " "
+            return f"soixante{sep}{below_hundred(rest)}"
+        rest = value - 80
+        if rest == 0:
+            return "quatre vingt"
+        return f"quatre vingt {below_hundred(rest)}"
+
+    def below_thousand(value: int) -> str:
+        if value < 100:
+            return below_hundred(value)
+        hundred = value // 100
+        rest = value % 100
+        prefix = "cent" if hundred == 1 else f"{units[hundred]} cent"
+        return prefix if rest == 0 else f"{prefix} {below_hundred(rest)}"
+
+    chunks = []
+    millions = number // 1_000_000
+    if millions:
+        chunks.append("un million" if millions == 1 else f"{below_thousand(millions)} millions")
+        number %= 1_000_000
+    thousands = number // 1000
+    if thousands:
+        chunks.append("mille" if thousands == 1 else f"{below_thousand(thousands)} mille")
+        number %= 1000
+    if number:
+        chunks.append(below_thousand(number))
+    return " ".join(chunks)
+
+
+def _capitalize(value: str) -> str:
+    return value[:1].upper() + value[1:] if value else value
 
 
 def _safe_filename(value: str) -> str:

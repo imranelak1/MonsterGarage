@@ -3101,6 +3101,10 @@ body {
   opacity: 0.5;
 }
 
+.opacity-60 {
+  opacity: 0.6;
+}
+
 .opacity-75 {
   opacity: 0.75;
 }
@@ -3440,6 +3444,10 @@ body {
   opacity: 0.5;
 }
 
+.disabled\:opacity-60:disabled {
+  opacity: 0.6;
+}
+
 @media (min-width: 640px) {
   .sm\:right-8 {
     right: 2rem;
@@ -3481,8 +3489,8 @@ body {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
-  .sm\:grid-cols-\[180px_1fr_auto\] {
-    grid-template-columns: 180px 1fr auto;
+  .sm\:grid-cols-\[160px_160px_1fr_auto\] {
+    grid-template-columns: 160px 160px 1fr auto;
   }
 
   .sm\:grid-cols-\[1fr_120px_140px_140px\] {

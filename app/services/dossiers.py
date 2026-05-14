@@ -1,4 +1,6 @@
+from datetime import date
 from decimal import Decimal, InvalidOperation
+import re
 
 from flask_login import current_user
 
@@ -16,6 +18,30 @@ class RegleMetierErreur(ValueError):
 def generer_numero_dossier() -> str:
     dernier_id = db.session.query(db.func.max(DossierReparation.id)).scalar() or 0
     return f"DA-{dernier_id + 1:05d}"
+
+
+def generer_numero_bon_sntl() -> str:
+    prefix = date.today().strftime("%y%m%d")
+    numeros = (
+        db.session.query(DossierReparation.numero_bon_sntl)
+        .filter(DossierReparation.numero_bon_sntl.like(f"{prefix}%"))
+        .all()
+    )
+    suffixes = [
+        int(numero[0][6:])
+        for numero in numeros
+        if numero[0] and re.fullmatch(rf"{prefix}\d{{6}}", numero[0])
+    ]
+    return f"{prefix}{max(suffixes, default=0) + 1:06d}"
+
+
+def normaliser_numero_bon_sntl(valeur: str | None) -> str:
+    chiffres = re.sub(r"\D", "", valeur or "")
+    if not chiffres:
+        return generer_numero_bon_sntl()
+    if len(chiffres) != 12:
+        raise RegleMetierErreur("Le numero de bon SNTL doit contenir 12 chiffres.")
+    return chiffres
 
 
 def journaliser(dossier: DossierReparation, action: str, details: str = "") -> None:
