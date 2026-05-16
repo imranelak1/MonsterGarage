@@ -97,8 +97,7 @@
                         </span>
                         {% if sal.est_prorata %}
                         <span class="text-xs text-slate-500">
-                            {{ sal.jours_travailles }} / {{ sal.jours_ouvrables }} jours
-                            ({{ "%.5f"|format(sal.taux_journalier) }} DH/j)
+                            prorata : {{ sal.jours_travailles }} / {{ sal.jours_ouvrables }} jours
                         </span>
                         {% endif %}
                     </div>
@@ -107,7 +106,7 @@
                 <div class="text-right">
                     <span class="font-black text-slate-950">{{ "%.2f"|format(sal.montant_net_paye) }} DH</span>
                     {% if sal.total_avances %}
-                    <p class="text-[10px] text-slate-400">Brut {{ "%.2f"|format(sal.salaire_brut) }} − avances {{ "%.2f"|format(sal.total_avances) }}</p>
+                    <p class="text-[10px] text-slate-400">Base {{ "%.2f"|format(sal.salaire_brut) }} - avances {{ "%.2f"|format(sal.total_avances) }}</p>
                     {% endif %}
                 </div>
             </div>
@@ -155,7 +154,10 @@
 
         {% if employe.type_remuneration in ('salaire_fixe', 'mixte') %}
         <section class="rounded-lg border border-yellow-200 bg-yellow-50 p-4 shadow-sm">
-            <h3 class="mb-3 text-xs font-black uppercase tracking-wide text-yellow-700">Régler ce mois</h3>
+            <h3 class="mb-2 text-xs font-black uppercase tracking-wide text-yellow-700">Régler ce mois</h3>
+            <p class="mb-3 text-xs font-semibold leading-5 text-yellow-800">
+                Étape 1 : payer le 15. Étape 2 : payer la fin du mois. Les avances après le 15 sont déduites automatiquement.
+            </p>
             <div class="grid gap-3">
                 <form method="post" action="{{ url_for('rh.payer_quinzaine_employe', employe_id=employe.id) }}">
                     <input type="hidden" name="mois" value="{{ mois }}">
@@ -163,7 +165,7 @@
                     <button class="flex w-full items-center justify-between rounded-lg border border-yellow-300 bg-white px-3 py-2.5 text-left text-sm font-black text-slate-900 transition hover:bg-yellow-100 {% if quinzaine_rec %}opacity-60{% endif %}"
                             type="submit" {% if quinzaine_rec %}disabled{% endif %}>
                         <span>Quinzaine du 15</span>
-                        <span>{{ "%.2f"|format(quinzaine_rec.montant_net_paye if quinzaine_rec else employe.salaire_quinzaine) }} DH</span>
+                        <span>{{ "%.2f"|format(quinzaine_rec.montant_net_paye if quinzaine_rec else (employe.salaire_quinzaine or 0)) }} DH</span>
                     </button>
                 </form>
 
@@ -171,16 +173,19 @@
                       class="grid gap-2 rounded-lg border border-yellow-300 bg-white p-3">
                     <input type="hidden" name="mois" value="{{ mois }}">
                     <input type="hidden" name="annee" value="{{ annee }}">
+                    <p class="text-xs font-semibold leading-5 text-slate-500">
+                        Laissez le montant normal sauf cas spécial. Remplissez les jours seulement pour un prorata.
+                    </p>
                     <div class="grid grid-cols-2 gap-2">
                         <div class="grid gap-1">
-                            <label class="text-[10px] font-black uppercase tracking-wide text-slate-400" for="brut_solde_single">Brut solde</label>
+                            <label class="text-[10px] font-black uppercase tracking-wide text-slate-400" for="brut_solde_single">Montant de base</label>
                             <input id="brut_solde_single" name="brut_solde" type="number" step="0.01" min="0"
-                                   value="{{ "%.2f"|format(solde_rec.salaire_brut if solde_rec else employe.salaire_quinzaine) }}"
+                                   value="{{ "%.2f"|format(solde_rec.salaire_brut if solde_rec else (employe.salaire_quinzaine or 0)) }}"
                                    class="h-10 rounded-md border border-slate-300 px-2 text-sm font-semibold outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100"
                                    {% if solde_rec %}disabled{% endif %}>
                         </div>
                         <div class="grid gap-1">
-                            <label class="text-[10px] font-black uppercase tracking-wide text-slate-400" for="jours_travailles_single">Jours</label>
+                            <label class="text-[10px] font-black uppercase tracking-wide text-slate-400" for="jours_travailles_single">Jours si absence</label>
                             <input id="jours_travailles_single" name="jours_travailles" type="number" min="0" max="{{ jours_ouvrables_fin_mois }}"
                                    placeholder="{{ jours_ouvrables_fin_mois }}"
                                    value="{{ solde_rec.jours_travailles if solde_rec and solde_rec.est_prorata else '' }}"
@@ -201,11 +206,11 @@
             <dl class="grid gap-2 text-sm">
                 <div class="flex justify-between">
                     <dt class="text-slate-500">Quinzaine</dt>
-                    <dd class="font-black text-slate-950">{{ "%.2f"|format(employe.salaire_quinzaine) }} DH</dd>
+                    <dd class="font-black text-slate-950">{{ "%.2f"|format(employe.salaire_quinzaine or 0) }} DH</dd>
                 </div>
                 <div class="flex justify-between">
                     <dt class="text-slate-500">Mensuel indicatif</dt>
-                    <dd class="font-semibold text-slate-700">{{ "%.2f"|format(employe.salaire_quinzaine * 2) }} DH</dd>
+                    <dd class="font-semibold text-slate-700">{{ "%.2f"|format((employe.salaire_quinzaine or 0) * 2) }} DH</dd>
                 </div>
             </dl>
         </section>
