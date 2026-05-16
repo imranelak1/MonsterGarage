@@ -20,6 +20,7 @@
                 <span>{{ label }}</span>
             </a>
         {%- endmacro %}
+        {% set current_endpoint = request.endpoint or '' %}
 
         <div class="mg-layout">
             <button class="mg-sidebar-backdrop" type="button" data-sidebar-close aria-label="Fermer la navigation"></button>
@@ -40,8 +41,11 @@
                         <p class="mg-nav-section">Principal</p>
                         <div class="grid gap-1">
                             {{ nav_link('dashboard.', url_for('dashboard.accueil'), 'Tableau de bord', 'TB') }}
-                            {{ nav_link('dossiers.', url_for('dossiers.liste'), 'Atelier & opérations', 'AT') }}
-                            <a class="mg-nav-link" href="{{ url_for('dossiers.liste') }}">
+                            <a class="mg-nav-link {% if current_endpoint.startswith('dossiers.') and 'devis' not in current_endpoint %}mg-nav-link-active{% endif %}" href="{{ url_for('dossiers.liste') }}">
+                                <span class="mg-nav-icon">AT</span>
+                                <span>Atelier & opérations</span>
+                            </a>
+                            <a class="mg-nav-link {% if current_endpoint.startswith('dossiers.') and 'devis' in current_endpoint %}mg-nav-link-active{% endif %}" href="{{ url_for('dossiers.liste_devis') }}">
                                 <span class="mg-nav-icon">DV</span>
                                 <span>Devis</span>
                             </a>
@@ -162,6 +166,55 @@
                 if (event.key === "Escape") {
                     root.classList.remove("mg-sidebar-open");
                 }
+            });
+
+            const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+            const isPlainLeftClick = (event) => (
+                event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey
+            );
+            let navigationTimer = null;
+
+            const resetMotionState = () => {
+                if (navigationTimer) {
+                    window.clearTimeout(navigationTimer);
+                    navigationTimer = null;
+                }
+                document.body.classList.remove("mg-page-leaving", "mg-form-submitting");
+            };
+
+            resetMotionState();
+            window.addEventListener("pageshow", resetMotionState);
+            document.addEventListener("visibilitychange", () => {
+                if (!document.hidden) {
+                    resetMotionState();
+                }
+            });
+
+            document.addEventListener("click", (event) => {
+                if (prefersReducedMotion || !isPlainLeftClick(event)) return;
+
+                const link = event.target.closest("a[href]");
+                if (!link) return;
+                if (link.target || link.hasAttribute("download")) return;
+
+                const url = new URL(link.href, window.location.href);
+                if (url.origin !== window.location.origin) return;
+                if (url.pathname === window.location.pathname && url.search === window.location.search) return;
+                if (url.hash && url.pathname === window.location.pathname) return;
+
+                event.preventDefault();
+                root.classList.remove("mg-sidebar-open");
+                document.body.classList.add("mg-page-leaving");
+                navigationTimer = window.setTimeout(() => {
+                    window.location.href = url.href;
+                }, 130);
+            });
+
+            document.addEventListener("submit", (event) => {
+                if (prefersReducedMotion) return;
+                const form = event.target;
+                if (!form.matches("form")) return;
+                document.body.classList.add("mg-form-submitting");
             });
         })();
     </script>

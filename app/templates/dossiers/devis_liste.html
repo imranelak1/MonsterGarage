@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}Devis - Monster Garage{% endblock %}
+
+{% block content %}
+<section class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div>
+        <p class="text-sm font-semibold text-slate-500">Devis</p>
+        <h1 class="mt-1 text-3xl font-black tracking-tight text-slate-950">Liste des devis</h1>
+    </div>
+    <a class="inline-flex h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50"
+       href="{{ url_for('dossiers.liste', statut='pending_devis') }}">Dossiers à chiffrer</a>
+</section>
+
+<section class="mb-5 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <form class="flex flex-col gap-3 sm:flex-row" method="get">
+        <input class="h-11 flex-1 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100"
+               type="search" name="q" value="{{ recherche }}" placeholder="Rechercher devis, client, véhicule, dossier...">
+        <select class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="statut">
+            <option value="">Tous les statuts</option>
+            <option value="pending" {% if statut == 'pending' %}selected{% endif %}>En attente</option>
+            <option value="approved" {% if statut == 'approved' %}selected{% endif %}>Approuvé</option>
+            <option value="rejected" {% if statut == 'rejected' %}selected{% endif %}>Refusé</option>
+        </select>
+        <button class="h-11 rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50" type="submit">Rechercher</button>
+    </form>
+</section>
+
+<section class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+    <div class="grid grid-cols-[120px_1fr_1fr_130px_140px] gap-4 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-wide text-slate-500">
+        <span>Devis</span>
+        <span>Dossier / client</span>
+        <span>Véhicule</span>
+        <span class="text-right">Montant TTC</span>
+        <span class="text-right">Statut</span>
+    </div>
+    <div class="divide-y divide-slate-200">
+        {% for item in devis %}
+            <a class="grid grid-cols-[120px_1fr_1fr_130px_140px] gap-4 px-4 py-4 text-sm transition hover:bg-yellow-50"
+               href="{{ url_for('dossiers.detail', dossier_id=item.dossier_id) }}">
+                <span class="font-black text-slate-950">v{{ item.version }}</span>
+                <span class="min-w-0">
+                    <span class="block font-black text-slate-950">{{ item.dossier.numero }}</span>
+                    <span class="block truncate font-semibold text-slate-600">{{ item.dossier.client.nom }}</span>
+                    <span class="block truncate text-xs text-slate-400">{{ item.objet }}</span>
+                </span>
+                <span class="text-slate-600">{{ item.dossier.vehicule.libelle }}</span>
+                <span class="text-right font-black text-slate-950">{{ "%.2f"|format(item.montant_ttc) }} MAD</span>
+                <span class="text-right">
+                    {% if item.statut == 'approved' %}
+                        <span class="inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-black uppercase text-emerald-700">Approuvé</span>
+                    {% elif item.statut == 'rejected' %}
+                        <span class="inline-flex rounded-full bg-red-100 px-2.5 py-1 text-[10px] font-black uppercase text-red-700">Refusé</span>
+                    {% else %}
+                        <span class="inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-black uppercase text-amber-700">En attente</span>
+                    {% endif %}
+                </span>
+            </a>
+        {% else %}
+            <p class="px-4 py-8 text-center text-sm font-semibold text-slate-500">Aucun devis pour le moment.</p>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}
