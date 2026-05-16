@@ -55,6 +55,36 @@ def liste():
     return render_template("dossiers/liste.html", dossiers=dossiers, statut=statut, recherche=recherche)
 
 
+@bp.route("/devis")
+@login_required
+def liste_devis():
+    statut = request.args.get("statut", "").strip()
+    recherche = request.args.get("q", "").strip()
+    requete = (
+        DevisReparation.query
+        .join(DevisReparation.dossier)
+        .join(DossierReparation.client)
+        .join(DossierReparation.vehicule)
+    )
+    if statut:
+        requete = requete.filter(DevisReparation.statut == statut)
+    if recherche:
+        motif = f"%{recherche}%"
+        requete = requete.filter(
+            db.or_(
+                DevisReparation.objet.ilike(motif),
+                DossierReparation.numero.ilike(motif),
+                Client.nom.ilike(motif),
+                Client.code.ilike(motif),
+                Vehicule.immatriculation.ilike(motif),
+                Vehicule.marque.ilike(motif),
+                Vehicule.modele.ilike(motif),
+            )
+        )
+    devis = requete.order_by(DevisReparation.created_at.desc()).limit(100).all()
+    return render_template("dossiers/devis_liste.html", devis=devis, statut=statut, recherche=recherche)
+
+
 @bp.route("/nouveau", methods=["GET", "POST"])
 @login_required
 def nouveau():
@@ -297,6 +327,24 @@ def reouvrir_garantie(dossier_id):
         db.session.rollback()
         flash(str(erreur), "danger")
 
+    return redirect(url_for("dossiers.detail", dossier_id=dossier.id))
+
+
+@bp.route("/<int:dossier_id>/note", methods=["POST"])
+@login_required
+def ajouter_note(dossier_id):
+    dossier = _obtenir_dossier(dossier_id)
+    if not dossier:
+        return redirect(url_for("dossiers.liste"))
+
+    note = request.form.get("note", "").strip()
+    if not note:
+        flash("La note est vide.", "warning")
+        return redirect(url_for("dossiers.detail", dossier_id=dossier.id))
+
+    journaliser(dossier, "note", note)
+    db.session.commit()
+    flash("Note ajoutée au dossier.", "success")
     return redirect(url_for("dossiers.detail", dossier_id=dossier.id))
 
 

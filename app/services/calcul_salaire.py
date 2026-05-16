@@ -294,6 +294,18 @@ def get_recap_mensuel(mois: int, annee: int) -> list[dict]:
             .with_entities(func.sum(AvanceSalaire.montant))
             .scalar() or 0
         )
+        avances_a_deduire = (
+            AvanceSalaire.query
+            .filter(
+                AvanceSalaire.employe_id == emp.id,
+                AvanceSalaire.mois == mois,
+                AvanceSalaire.annee == annee,
+                AvanceSalaire.quinzaine == "seconde",
+                AvanceSalaire.type.in_(["avance", "credit"]),
+            )
+            .with_entities(func.sum(AvanceSalaire.montant))
+            .scalar() or 0
+        )
 
         # Quinzaine et solde enregistrés
         quinzaine_rec = (
@@ -342,7 +354,9 @@ def get_recap_mensuel(mois: int, annee: int) -> list[dict]:
         lignes.append({
             "employe": emp,
             "total_avances": Decimal(str(total_avances)),
+            "avances_a_deduire": Decimal(str(avances_a_deduire)),
             "total_primes": Decimal(str(total_primes)),
+            "autres_paiements": Decimal(str(total_primes)),
             "total_frais": Decimal(str(total_frais)),
             "quinzaine": quinzaine_rec,
             "solde": solde_rec,

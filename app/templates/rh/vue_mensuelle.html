@@ -56,12 +56,12 @@
 <section class="mb-5 flex flex-wrap gap-3">
     <button class="rh-action-btn"
             type="button" data-modal-open="modal-quinzaine">
-        Enregistrer quinzaine
+        Payer le 15
     </button>
 
     <button class="rh-action-btn"
             type="button" data-modal-open="modal-soldes">
-        Calculer soldes
+        Payer fin de mois
     </button>
 
     <button class="rh-action-btn"
@@ -81,14 +81,14 @@
         <div class="rh-modal-header">
             <div>
                 <p class="text-[10px] font-black uppercase tracking-widest text-slate-400">Paiement du 15</p>
-                <h2 class="mt-0.5 text-xl font-black text-slate-950">Enregistrer la quinzaine</h2>
+                <h2 class="mt-0.5 text-xl font-black text-slate-950">Payer le 15</h2>
             </div>
             <button class="rh-modal-close" type="button" data-modal-close="modal-quinzaine">✕</button>
         </div>
         <form method="post" action="{{ url_for('rh.payer_quinzaine', annee=annee, mois=mois) }}" class="contents">
             <div class="rh-modal-body grid gap-5">
             <div class="rh-dialog-note-warning">
-                Cette action crée le paiement de quinzaine pour les employés actifs à salaire fixe ou mixte.
+                Cette action paie automatiquement la première moitié du salaire pour les employés actifs à salaire fixe ou mixte.
                 Les employés déjà payés pour {{ mois }}/{{ annee }} seront ignorés.
             </div>
             <div class="grid gap-2 text-sm text-slate-600">
@@ -111,18 +111,28 @@
 </div>
 
 {# ── Tableau mensuel ─────────────────────────────────────────────────────── #}
-<section class="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
-    <table class="w-full min-w-[900px] text-sm">
+<section class="rounded-lg border border-slate-200 bg-white shadow-sm">
+    <div class="flex flex-col gap-2 border-b border-slate-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+            <h2 class="text-base font-black text-slate-950">Calcul simplifié</h2>
+            <p class="mt-1 text-xs font-semibold text-slate-500">
+                Total = paiement du 15 + autres paiements + solde fin de mois. Les avances après le 15 sont retirées du solde.
+            </p>
+        </div>
+        <span class="inline-flex rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black uppercase tracking-wide text-slate-600">
+            Frais hors salaire
+        </span>
+    </div>
+    <div class="overflow-x-auto">
+    <table class="w-full min-w-[820px] text-sm">
         <thead>
             <tr class="border-b border-slate-200 bg-slate-50 text-xs font-black uppercase tracking-wide text-slate-500">
                 <th class="px-4 py-3 text-left">Employé</th>
-                <th class="px-4 py-3 text-left">Fonction</th>
-                <th class="px-3 py-3 text-right">Avances</th>
-                <th class="px-3 py-3 text-right">Primes / Tâches</th>
-                <th class="px-3 py-3 text-right">Quinzaine</th>
-                <th class="px-3 py-3 text-right">Solde net</th>
-                <th class="px-3 py-3 text-right font-black text-slate-700">Net salaire</th>
-                <th class="px-4 py-3 text-center">Statut</th>
+                <th class="px-3 py-3 text-right">Payé le 15</th>
+                <th class="px-3 py-3 text-right">Avances à déduire</th>
+                <th class="px-3 py-3 text-right">Autres paiements</th>
+                <th class="px-3 py-3 text-right">Fin de mois</th>
+                <th class="px-3 py-3 text-right font-black text-slate-700">Total net</th>
                 <th class="px-4 py-3"></th>
             </tr>
         </thead>
@@ -140,56 +150,55 @@
                         Reste {{ ligne.reste_du|int }} DH
                     </span>
                     {% endif %}
-                </td>
-                <td class="px-4 py-3 text-slate-500">{{ emp.fonction_libelle }}</td>
-
-                <td class="px-3 py-3 text-right text-slate-700">
-                    {% if ligne.total_avances %}
-                        <span class="font-semibold text-red-600">{{ "%.2f"|format(ligne.total_avances) }}</span>
-                    {% else %}—{% endif %}
-                </td>
-
-                <td class="px-3 py-3 text-right text-slate-700">
-                    {% if ligne.total_primes %}
-                        <span class="font-semibold text-blue-600">{{ "%.2f"|format(ligne.total_primes) }}</span>
-                    {% else %}—{% endif %}
+                    <p class="mt-1 text-xs font-semibold text-slate-400">{{ emp.fonction_libelle }} · {{ emp.type_remuneration_libelle }}</p>
                 </td>
 
                 <td class="px-3 py-3 text-right">
                     {% if ligne.quinzaine %}
-                        {{ "%.2f"|format(ligne.quinzaine.montant_net_paye) }}
+                        <span class="font-black text-slate-950">{{ "%.2f"|format(ligne.quinzaine.montant_net_paye) }}</span>
                     {% elif emp.type_remuneration == 'tache' %}
                         <span class="text-slate-400 text-xs">N/A</span>
                     {% else %}
-                        <span class="text-amber-500 text-xs font-semibold">—</span>
+                        <span class="text-amber-600 text-xs font-black">À faire</span>
                     {% endif %}
                 </td>
 
-                <td class="px-3 py-3 text-right font-semibold">
+                <td class="px-3 py-3 text-right">
+                    {% if ligne.avances_a_deduire %}
+                        <span class="font-black text-red-600">-{{ "%.2f"|format(ligne.avances_a_deduire) }}</span>
+                        <p class="text-[10px] font-semibold text-slate-400">après le 15</p>
+                    {% else %}
+                        <span class="text-slate-400">0.00</span>
+                    {% endif %}
+                </td>
+
+                <td class="px-3 py-3 text-right">
+                    {% if ligne.autres_paiements %}
+                        <span class="font-black text-blue-600">+{{ "%.2f"|format(ligne.autres_paiements) }}</span>
+                    {% else %}
+                        <span class="text-slate-400">0.00</span>
+                    {% endif %}
+                </td>
+
+                <td class="px-3 py-3 text-right">
                     {% if ligne.solde %}
-                        {{ "%.2f"|format(ligne.solde.montant_net_paye) }}
+                        <span class="font-black text-slate-950">{{ "%.2f"|format(ligne.solde.montant_net_paye) }}</span>
                         {% if ligne.solde.est_prorata %}
-                        <span class="ml-1 text-[10px] font-black uppercase text-slate-400">prorata</span>
+                        <p class="text-[10px] font-black uppercase text-slate-400">prorata</p>
+                        {% elif ligne.solde.total_avances %}
+                        <p class="text-[10px] font-semibold text-slate-400">{{ "%.2f"|format(ligne.solde.salaire_brut) }} - {{ "%.2f"|format(ligne.solde.total_avances) }}</p>
                         {% endif %}
                     {% elif emp.type_remuneration == 'tache' %}
                         <span class="text-slate-400 text-xs">Manuel</span>
                     {% else %}
-                        <span class="text-amber-500 text-xs font-semibold">—</span>
+                        {% set solde_prevu = (emp.salaire_quinzaine or 0) - ligne.avances_a_deduire %}
+                        <span class="text-amber-600 text-xs font-black">À calculer</span>
+                        <p class="text-[10px] font-semibold text-slate-400">prévu {{ "%.2f"|format(solde_prevu) }}</p>
                     {% endif %}
                 </td>
 
                 <td class="px-3 py-3 text-right font-black text-slate-950">
                     {{ "%.2f"|format(ligne.total_mois) }}
-                </td>
-
-                <td class="px-4 py-3 text-center">
-                    {% if 'solde_fin_mois_non_paye' in ligne.alertes %}
-                        <span class="inline-flex items-center rounded-full bg-red-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-red-700">Non payé</span>
-                    {% elif emp.type_remuneration == 'tache' %}
-                        <span class="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-blue-700">Tâche</span>
-                    {% else %}
-                        <span class="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-emerald-700">✓ Payé</span>
-                    {% endif %}
                 </td>
 
                 <td class="px-4 py-3">
@@ -204,7 +213,7 @@
             </tr>
             {% else %}
             <tr>
-                <td class="px-4 py-10 text-center text-sm font-semibold text-slate-400" colspan="9">
+                <td class="px-4 py-10 text-center text-sm font-semibold text-slate-400" colspan="7">
                     Aucun employé actif.
                 </td>
             </tr>
@@ -212,14 +221,15 @@
         </tbody>
         <tfoot>
             <tr class="border-t-2 border-slate-300 bg-slate-50">
-                <td class="px-4 py-3 text-sm font-black text-slate-950" colspan="6">Total net salaires {{ mois }}/{{ annee }}</td>
+                <td class="px-4 py-3 text-sm font-black text-slate-950" colspan="5">Total net salaires {{ mois }}/{{ annee }}</td>
                 <td class="px-3 py-3 text-right text-base font-black text-slate-950">
                     {{ "%.2f"|format(total) }} DH
                 </td>
-                <td colspan="2"></td>
+                <td></td>
             </tr>
         </tfoot>
     </table>
+    </div>
 </section>
 
 {# ── Modal : saisie avance / prime / tâche ───────────────────────────────── #}
@@ -390,35 +400,46 @@
         <div class="rh-modal-header">
             <div>
                 <p class="text-[10px] font-black uppercase tracking-widest text-slate-400">Fin de mois</p>
-                <h2 class="text-lg font-black text-slate-950">Calculer les soldes — {{ ['','Jan','Fév','Mar','Avr','Mai','Juin','Juil','Août','Sep','Oct','Nov','Déc'][mois] }} {{ annee }}</h2>
+                <h2 class="text-lg font-black text-slate-950">Payer la fin du mois — {{ ['','Jan','Fév','Mar','Avr','Mai','Juin','Juil','Août','Sep','Oct','Nov','Déc'][mois] }} {{ annee }}</h2>
             </div>
             <button class="rh-modal-close" type="button" data-modal-close="modal-soldes">✕</button>
         </div>
         <form method="post" action="{{ url_for('rh.calculer_soldes', annee=annee, mois=mois) }}" class="contents">
             <div class="rh-modal-body">
             <div class="rh-dialog-note mb-4">
-                Le solde utilise le brut de la deuxième quinzaine, moins les avances/crédits pris après le 15.
-                Ajustez le brut pour les cas particuliers, ou indiquez les jours travaillés en cas de prorata.
+                En cas normal, ne changez rien : le système paie la deuxième moitié du salaire et retire automatiquement les avances/crédits après le 15.
+                Renseignez les jours seulement si l'employé n'a pas travaillé toute la fin du mois.
             </div>
             <div class="grid gap-2">
                 {% for ligne in lignes %}
                 {% set emp = ligne.employe %}
                 {% if emp.type_remuneration in ('salaire_fixe', 'mixte') %}
-                <div class="flex items-center gap-4 rounded-lg border border-slate-200 px-4 py-2.5">
-                    <span class="flex-1 font-semibold text-slate-900">{{ emp.nom_complet }}</span>
-                    <span class="text-xs text-slate-400">{{ "%.2f"|format(emp.salaire_quinzaine) }} DH / quinzaine</span>
+                <div class="grid gap-3 rounded-lg border border-slate-200 px-4 py-3 sm:grid-cols-[1fr_auto] sm:items-center">
+                    <div>
+                        <p class="font-black text-slate-900">{{ emp.nom_complet }}</p>
+                        <p class="mt-1 text-xs font-semibold text-slate-500">
+                            Solde normal : {{ "%.2f"|format(emp.salaire_quinzaine or 0) }} DH
+                            {% if ligne.avances_a_deduire %}
+                            · avances à retirer : {{ "%.2f"|format(ligne.avances_a_deduire) }} DH
+                            {% endif %}
+                        </p>
+                    </div>
                     {% if ligne.solde %}
                     <span class="text-xs font-black text-emerald-600">✓ Déjà payé</span>
                     {% else %}
-                    <div class="flex items-center gap-2">
-                        <label class="text-xs text-slate-500" for="brut_solde_{{ emp.id }}">Brut solde</label>
+                    <div class="grid gap-2 sm:grid-cols-[120px_120px]">
+                        <label class="grid gap-1 text-xs font-semibold text-slate-500" for="brut_solde_{{ emp.id }}">
+                            Montant de base
                         <input type="number" name="brut_solde_{{ emp.id }}" id="brut_solde_{{ emp.id }}"
-                               step="0.01" min="0" value="{{ "%.2f"|format(emp.salaire_quinzaine) }}"
-                               class="h-9 w-24 rounded-md border border-slate-300 px-2 text-center text-sm focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100 outline-none">
-                        <label class="text-xs text-slate-500" for="jours_{{ emp.id }}">Jours</label>
+                               step="0.01" min="0" value="{{ "%.2f"|format(emp.salaire_quinzaine or 0) }}"
+                               class="h-9 rounded-md border border-slate-300 px-2 text-center text-sm focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100 outline-none">
+                        </label>
+                        <label class="grid gap-1 text-xs font-semibold text-slate-500" for="jours_{{ emp.id }}">
+                            Jours travaillés
                         <input type="number" name="jours_{{ emp.id }}" id="jours_{{ emp.id }}"
                                min="0" max="{{ jours_ouvrables_fin_mois }}" placeholder="{{ jours_ouvrables_fin_mois }}"
-                               class="h-9 w-20 rounded-md border border-slate-300 px-2 text-center text-sm focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100 outline-none">
+                               class="h-9 rounded-md border border-slate-300 px-2 text-center text-sm focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100 outline-none">
+                        </label>
                     </div>
                     {% endif %}
                 </div>
@@ -428,7 +449,7 @@
             </div>
             <div class="rh-modal-footer">
                 <button class="rh-action-btn-muted" type="button" data-modal-close="modal-soldes">Annuler</button>
-                <button class="rh-action-btn-primary" type="submit">Calculer et enregistrer</button>
+                <button class="rh-action-btn-primary" type="submit">Payer la fin du mois</button>
             </div>
         </form>
     </div>

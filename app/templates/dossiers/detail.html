@@ -3,17 +3,43 @@
 {% block title %}{{ dossier.numero }} - Monster Garage{% endblock %}
 
 {% block content %}
+{% macro mg_icon(name, class='h-5 w-5') -%}
+<svg class="{{ class }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    {% if name == 'car' %}
+    <path d="M5 17h14" /><path d="M6 17v2" /><path d="M18 17v2" /><path d="M5 13l1.6-4.2A3 3 0 0 1 9.4 7h5.2a3 3 0 0 1 2.8 1.8L19 13" /><path d="M4 13h16v4H4z" /><path d="M7 15h.01" /><path d="M17 15h.01" />
+    {% elif name == 'user' %}
+    <path d="M20 21a8 8 0 0 0-16 0" /><circle cx="12" cy="7" r="4" />
+    {% elif name == 'edit' %}
+    <path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" />
+    {% elif name == 'file' %}
+    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z" /><path d="M14 3v5h5" /><path d="M9 13h6" /><path d="M9 17h4" />
+    {% elif name == 'check' %}
+    <circle cx="12" cy="12" r="9" /><path d="m8.5 12.5 2.3 2.3 4.9-5.2" />
+    {% elif name == 'package' %}
+    <path d="m12 3 8 4.5v9L12 21l-8-4.5v-9Z" /><path d="m4 7.5 8 4.5 8-4.5" /><path d="M12 12v9" />
+    {% elif name == 'wrench' %}
+    <path d="M14.7 6.3a4 4 0 0 0 5 5L11 20a2.8 2.8 0 0 1-4-4l8.7-8.7Z" /><path d="m18 5 1 1" />
+    {% elif name == 'receipt' %}
+    <path d="M6 3h12v18l-2-1-2 1-2-1-2 1-2-1-2 1Z" /><path d="M9 8h6" /><path d="M9 12h6" /><path d="M9 16h4" />
+    {% elif name == 'truck' %}
+    <path d="M3 7h11v9H3z" /><path d="M14 10h4l3 3v3h-7z" /><circle cx="7" cy="18" r="2" /><circle cx="17" cy="18" r="2" />
+    {% else %}
+    <circle cx="12" cy="12" r="9" />
+    {% endif %}
+</svg>
+{%- endmacro %}
+
 {% set statuts_facturables = ['completed', 'cancelled_billable'] %}
 {% set workflow_step = 1 %}
 {% if dossier.statut == 'pending_approval' %}
     {% set workflow_step = 2 %}
-{% elif dossier.statut in ['in_progress', 'paused_pending_approval'] %}
-    {% set workflow_step = 3 %}
-{% elif dossier.statut in statuts_facturables %}
+{% elif dossier.statut == 'paused_pending_approval' %}
+    {% set workflow_step = 1 %}
+{% elif dossier.statut == 'in_progress' %}
     {% set workflow_step = 4 %}
-    {% if dossier.facture and dossier.facture.statut == 'livree' %}
-        {% set workflow_step = 5 %}
-    {% elif dossier.facture and dossier.facture.statut == 'reglee' %}
+{% elif dossier.statut in statuts_facturables %}
+    {% set workflow_step = 5 %}
+    {% if dossier.facture and dossier.facture.statut in ['emise', 'livree', 'reglee'] %}
         {% set workflow_step = 6 %}
     {% endif %}
 {% elif dossier.statut == 'cancelled' %}
@@ -28,218 +54,376 @@
     <a class="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50" href="{{ url_for('dossiers.liste') }}">Retour dossiers</a>
 </section>
 
-<section class="mb-5 rounded-lg border-l-8 border-monster-jaune bg-black p-5 text-white shadow-sm">
-    <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-            <p class="text-sm font-black uppercase tracking-wide text-monster-jaune">{{ dossier.statut_libelle }}</p>
-            <h2 class="mt-1 text-2xl font-black">{{ dossier.client.nom }} / {{ dossier.vehicule.libelle }}</h2>
-            <p class="mt-2 max-w-4xl text-sm leading-6 text-slate-200">{{ dossier.demande_client }}</p>
-            {% if dossier.assurance_nom %}
-                <p class="mt-1 text-sm font-semibold text-slate-300">Assurance : {{ dossier.assurance_nom }}</p>
-            {% endif %}
-        </div>
-        <div class="grid gap-1 text-sm lg:text-right">
-            <span class="font-black text-monster-jaune">{{ dossier.dernier_devis.statut_libelle if dossier.dernier_devis else "Aucun devis" }}</span>
-            <span class="font-semibold text-slate-300">{{ dossier.facture.numero if dossier.facture else "Facture non générée" }}</span>
-        </div>
-    </div>
-</section>
-
-<section class="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg shadow-slate-200/70">
-    <div class="border-b border-slate-200 bg-slate-950 p-5 text-white">
-        <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-            <div>
-                <p class="text-[10px] font-black uppercase tracking-[0.22em] text-monster-jaune">Poste de commande</p>
-                <h2 class="mt-1 text-2xl font-black tracking-tight">Contrôle workflow</h2>
-                <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-300">Cette zone pilote la prochaine action autorisée du dossier. Les devis, le journal et les montants restent en support juste en dessous.</p>
+<section class="grid gap-5 xl:grid-cols-[360px_1fr]">
+    <aside class="grid gap-4 self-start xl:sticky xl:top-24">
+        <section class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+            <div class="border-b border-slate-200 bg-slate-950 px-5 py-4 text-white">
+                <p class="text-[10px] font-black uppercase tracking-[0.2em] text-monster-jaune">{{ dossier.statut_libelle }}</p>
+                <h2 class="mt-1 text-xl font-black">{{ dossier.vehicule.libelle }}</h2>
+                <p class="mt-1 text-sm font-semibold text-slate-300">{{ dossier.client.nom }}</p>
             </div>
-            <span class="inline-flex w-fit rounded-full border border-yellow-300/30 bg-yellow-300/10 px-4 py-2 text-xs font-black uppercase tracking-[0.14em] text-monster-jaune">{{ dossier.statut_libelle }}</span>
-        </div>
-    </div>
 
-    <div class="grid gap-5 p-5">
-        <div class="grid gap-3 md:grid-cols-6">
-            {% for index, label in [(1, 'Prise en charge'), (2, 'Accord devis'), (3, 'Réparation'), (4, 'Facturation'), (5, 'Livraison'), (6, 'Règlement')] %}
-                <div class="rounded-xl border p-3 {% if workflow_step > index %}border-emerald-200 bg-emerald-50{% elif workflow_step == index %}border-yellow-300 bg-yellow-50 shadow-sm shadow-yellow-200/50{% else %}border-slate-200 bg-slate-50{% endif %}">
-                    <p class="text-[10px] font-black uppercase tracking-[0.16em] {% if workflow_step > index %}text-emerald-700{% elif workflow_step == index %}text-slate-950{% else %}text-slate-400{% endif %}">Étape {{ index }}</p>
-                    <p class="mt-1 text-sm font-black {% if workflow_step > index %}text-emerald-900{% elif workflow_step == index %}text-slate-950{% else %}text-slate-500{% endif %}">{{ label }}</p>
-                </div>
-            {% endfor %}
-        </div>
-
-        <article class="rounded-xl border-2 border-slate-900 bg-slate-50 p-5">
-            <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div class="grid gap-5 p-5">
                 <div>
-                    <p class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Prochaine action</p>
+                    <div class="flex items-center gap-2 text-slate-400">
+                        {{ mg_icon('car', 'h-4 w-4') }}
+                        <h3 class="text-[10px] font-black uppercase tracking-[0.18em]">Véhicule</h3>
+                    </div>
+                    <dl class="mt-3 grid gap-2 text-sm">
+                        <div class="flex justify-between gap-4"><dt class="text-slate-500">Marque / modèle</dt><dd class="font-bold text-slate-900">{{ dossier.vehicule.marque }} {{ dossier.vehicule.modele }}</dd></div>
+                        <div class="flex justify-between gap-4"><dt class="text-slate-500">Immatriculation</dt><dd class="font-bold text-slate-900">{{ dossier.vehicule.immatriculation }}</dd></div>
+                        {% if dossier.kilometrage_entree %}
+                        <div class="flex justify-between gap-4"><dt class="text-slate-500">Kilométrage</dt><dd class="font-bold text-slate-900">{{ dossier.kilometrage_entree }} km</dd></div>
+                        {% endif %}
+                    </dl>
+                </div>
 
-                    {% if dossier.statut == 'pending_devis' and dossier.dernier_devis and dossier.dernier_devis.statut == 'rejected' %}
-                        <h3 class="mt-1 text-2xl font-black text-slate-950">Dernier devis refusé</h3>
-                        <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-700">Le dossier n'est pas bloqué : créez une version corrigée du devis, ou annulez le dossier si le client ne souhaite pas continuer.</p>
-                    {% elif dossier.statut in ['pending_devis', 'paused_pending_approval'] %}
-                        <h3 class="mt-1 text-2xl font-black text-slate-950">Créer le devis à faire valider</h3>
-                        <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-700">Le dossier attend un devis. Aucune réparation ne doit continuer sans accord sur la dernière version.</p>
-                    {% elif dossier.dernier_devis and dossier.dernier_devis.statut == 'pending' %}
-                        <h3 class="mt-1 text-2xl font-black text-slate-950">Obtenir l'accord client</h3>
-                        <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-700">Devis v{{ dossier.dernier_devis.version }} en attente. Seule cette dernière version peut être approuvée ou refusée.</p>
-                    {% elif dossier.statut == 'in_progress' and dossier.facture %}
-                        <h3 class="mt-1 text-2xl font-black text-slate-950">Reprise garantie en cours</h3>
-                        <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-700">Le client est revenu apres facturation finale. La reprise continue sur le meme dossier pour garder toute la tracabilite.</p>
-                    {% elif dossier.statut == 'in_progress' %}
-                        <h3 class="mt-1 text-2xl font-black text-slate-950">Piloter la réparation</h3>
-                        <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-700">Si un coût supplémentaire apparaît, mettez le dossier en pause et créez un devis complémentaire. Sinon, marquez la réparation terminée.</p>
-                    {% elif dossier.statut == 'cancelled_billable' and not dossier.facture %}
-                        <h3 class="mt-1 text-2xl font-black text-slate-950">Facturer les travaux effectues</h3>
-                        <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-700">La reparation est annulee, mais un devis approuve couvre le travail deja fait. Generez la facture uniquement sur ces lignes.</p>
-                    {% elif dossier.statut in statuts_facturables and not dossier.facture %}
-                        <h3 class="mt-1 text-2xl font-black text-slate-950">Générer la facture finale</h3>
-                        <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-700">La réparation est terminée. La facture doit partir du dernier devis approuvé.</p>
-                    {% elif dossier.statut in statuts_facturables and dossier.facture and dossier.facture.statut == 'emise' %}
-                        <h3 class="mt-1 text-2xl font-black text-slate-950">Livrer le véhicule</h3>
-                        <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-700">La facture {{ dossier.facture.numero }} est émise. Prochaine étape : confirmer la livraison au client.</p>
-                    {% elif dossier.statut in statuts_facturables and dossier.facture and dossier.facture.statut == 'livree' %}
-                        <h3 class="mt-1 text-2xl font-black text-slate-950">Enregistrer le règlement</h3>
-                        <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-700">Le véhicule est livré. Enregistrez le règlement pour clôturer le flux.</p>
-                    {% elif dossier.statut == 'completed' and dossier.facture and dossier.facture.statut == 'reglee' %}
-                        <h3 class="mt-1 text-2xl font-black text-slate-950">Flux clôturé</h3>
-                        <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-700">Le dossier est terminé, livré et réglé. Aucune action atelier restante.</p>
-                    {% elif dossier.statut == 'cancelled_billable' and dossier.facture %}
-                        <h3 class="mt-1 text-2xl font-black text-slate-950">Annulation facturee</h3>
-                        <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-700">La reparation a ete annulee et seuls les travaux effectues ont ete portes en facture.</p>
-                    {% elif dossier.statut == 'cancelled' %}
-                        <h3 class="mt-1 text-2xl font-black text-slate-950">Dossier annulé</h3>
-                        <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-700">Le flux est arrêté. Consultez le journal d'actions pour le motif et la traçabilité.</p>
+                <div class="border-t border-slate-100 pt-5">
+                    <div class="flex items-center justify-between gap-3">
+                        <div class="flex items-center gap-2 text-slate-400">
+                            {{ mg_icon('user', 'h-4 w-4') }}
+                            <h3 class="text-[10px] font-black uppercase tracking-[0.18em]">Client</h3>
+                        </div>
+                        <a class="grid h-8 w-8 place-items-center rounded-full border border-slate-200 bg-white text-sm font-black text-slate-500 shadow-sm transition hover:border-yellow-300 hover:bg-yellow-50 hover:text-black"
+                           href="{{ url_for('clients.modifier', client_id=dossier.client.id, retour=request.full_path) }}"
+                           title="Modifier les informations client"
+                           aria-label="Modifier les informations client">
+                            {{ mg_icon('edit', 'h-4 w-4') }}
+                        </a>
+                    </div>
+                    <dl class="mt-3 grid gap-2 text-sm">
+                        <div class="flex justify-between gap-4"><dt class="text-slate-500">Nom</dt><dd class="text-right font-bold text-slate-900">{{ dossier.client.nom }}</dd></div>
+                        <div class="flex justify-between gap-4"><dt class="text-slate-500">Type</dt><dd class="font-bold text-slate-900">{{ dossier.client.type|upper }}</dd></div>
+                        {% if dossier.client.telephone %}
+                        <div class="flex justify-between gap-4"><dt class="text-slate-500">Téléphone</dt><dd class="font-bold text-slate-900">{{ dossier.client.telephone }}</dd></div>
+                        {% endif %}
+                        {% if dossier.assurance_nom %}
+                        <div class="flex justify-between gap-4"><dt class="text-slate-500">Assurance</dt><dd class="text-right font-bold text-slate-900">{{ dossier.assurance_nom }}</dd></div>
+                        {% endif %}
+                    </dl>
+                </div>
+
+                <div class="border-t border-slate-100 pt-5">
+                    <h3 class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Demande atelier</h3>
+                    <p class="mt-2 text-sm leading-6 text-slate-700">{{ dossier.demande_client }}</p>
+                    {% if dossier.diagnostic_initial %}
+                    <p class="mt-3 rounded-md bg-slate-50 p-3 text-xs font-semibold leading-5 text-slate-600">{{ dossier.diagnostic_initial }}</p>
                     {% endif %}
                 </div>
+            </div>
+        </section>
 
-                <div class="w-full xl:w-[420px]">
-                    {% if dossier.statut == 'pending_devis' and dossier.dernier_devis and dossier.dernier_devis.statut == 'rejected' %}
-                        <a class="inline-flex h-11 w-full items-center justify-center rounded-md bg-monster-jaune px-4 text-sm font-black text-black" href="{{ url_for('dossiers.nouveau_devis', dossier_id=dossier.id) }}">Créer une version corrigée</a>
-                    {% elif dossier.statut in ['pending_devis', 'paused_pending_approval'] %}
-                        <a class="inline-flex h-11 w-full items-center justify-center rounded-md bg-monster-jaune px-4 text-sm font-black text-black" href="{{ url_for('dossiers.nouveau_devis', dossier_id=dossier.id) }}">Créer un devis</a>
-                    {% elif dossier.dernier_devis and dossier.dernier_devis.statut == 'pending' %}
-                        <form class="grid gap-3" method="post" action="{{ url_for('dossiers.approuver', devis_id=dossier.dernier_devis.id) }}">
-                            <select class="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm" name="mode_accord">
+        <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <h3 class="text-sm font-black text-slate-950">Résumé</h3>
+            <dl class="mt-3 grid gap-2 text-sm">
+                <div class="flex justify-between gap-4"><dt class="text-slate-500">Dernier devis</dt><dd class="font-black text-slate-900">{{ dossier.dernier_devis.statut_libelle if dossier.dernier_devis else "Aucun" }}</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-slate-500">Facture</dt><dd class="font-black text-slate-900">{{ dossier.facture.numero if dossier.facture else "Non générée" }}</dd></div>
+                {% if dossier.numero_bon_sntl %}
+                <div class="flex justify-between gap-4"><dt class="text-slate-500">Bon SNTL</dt><dd class="font-black text-slate-900">{{ dossier.numero_bon_sntl }}</dd></div>
+                {% endif %}
+            </dl>
+        </section>
+    </aside>
+
+    <div class="grid gap-5">
+        <section class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+            <div class="border-b border-slate-200 bg-slate-950 px-5 py-4 text-white">
+                <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                        <p class="text-[10px] font-black uppercase tracking-[0.22em] text-monster-jaune">Workflow dossier</p>
+                        <h2 class="mt-1 text-2xl font-black tracking-tight">Prochaine étape claire</h2>
+                    </div>
+                    <span class="inline-flex w-fit rounded-full border border-yellow-300/30 bg-yellow-300/10 px-4 py-2 text-xs font-black uppercase tracking-[0.14em] text-monster-jaune">{{ dossier.statut_libelle }}</span>
+                </div>
+            </div>
+
+            <div class="grid gap-3 p-5 md:grid-cols-6">
+                {% for index, label, icon in [(1, 'Devis', 'file'), (2, 'Accord', 'check'), (3, 'Pièces', 'package'), (4, 'Réparation', 'wrench'), (5, 'Facturation', 'receipt'), (6, 'Livraison / règlement', 'truck')] %}
+                    <div class="rounded-lg border px-3 py-3 {% if workflow_step > index %}border-emerald-200 bg-emerald-50{% elif workflow_step == index %}border-monster-jaune bg-yellow-50 shadow-md shadow-yellow-200/60{% else %}border-slate-200 bg-slate-50{% endif %}">
+                        <div class="mb-2 flex items-center justify-between gap-2 {% if workflow_step > index %}text-emerald-700{% elif workflow_step == index %}text-black{% else %}text-slate-400{% endif %}">
+                            <span class="grid h-8 w-8 place-items-center rounded-md {% if workflow_step > index %}bg-emerald-600 text-white{% elif workflow_step == index %}bg-monster-jaune text-black{% else %}bg-white text-slate-400{% endif %}">
+                                {{ mg_icon(icon, 'h-4 w-4') }}
+                            </span>
+                            <span class="text-[9px] font-black uppercase tracking-[0.14em]">Étape {{ index }}</span>
+                        </div>
+                        <p class="text-sm font-black {% if workflow_step > index %}text-emerald-900{% elif workflow_step == index %}text-black{% else %}text-slate-500{% endif %}">{{ label }}</p>
+                    </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <div class="mb-3 grid gap-3 xl:grid-cols-[1fr_360px] xl:items-end">
+                <div>
+                    <h2 class="text-lg font-black text-slate-950">Timeline des actions</h2>
+                    <p class="mt-1 text-xs font-semibold text-slate-500">Actions compactes, documents utiles et notes du dossier.</p>
+                </div>
+                <form class="flex gap-2" method="post" action="{{ url_for('dossiers.ajouter_note', dossier_id=dossier.id) }}">
+                    <input class="h-9 min-w-0 flex-1 rounded-md border border-slate-300 px-3 text-xs font-semibold outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="note" placeholder="Ajouter une note rapide...">
+                    <button class="h-9 rounded-md border border-slate-300 bg-white px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50" type="submit">Ajouter note</button>
+                </form>
+            </div>
+
+            <div class="space-y-2">
+                <article class="grid gap-3 rounded-lg border p-3 {% if workflow_step == 1 %}border-monster-jaune bg-yellow-50{% else %}border-slate-200 bg-white{% endif %} lg:grid-cols-[36px_1fr_250px]">
+                    <div class="grid h-9 w-9 place-items-center rounded-full {% if dossier.dernier_devis %}bg-emerald-600 text-white{% elif workflow_step == 1 %}bg-monster-jaune text-black{% else %}bg-slate-100 text-slate-400{% endif %}">
+                        {{ mg_icon('file', 'h-4 w-4') }}
+                    </div>
+                    <div class="min-w-0">
+                        <h3 class="text-sm font-black text-slate-950">Devis</h3>
+                        {% if dossier.dernier_devis and dossier.dernier_devis.statut == 'rejected' %}
+                        <p class="mt-0.5 text-xs leading-5 text-slate-600">Dernier devis refusé. Créez une version corrigée pour relancer l'accord client.</p>
+                        {% elif dossier.dernier_devis %}
+                        <p class="mt-0.5 text-xs leading-5 text-slate-600">Dernier devis : v{{ dossier.dernier_devis.version }} - {{ dossier.dernier_devis.statut_libelle }} - {{ "%.2f"|format(dossier.dernier_devis.montant_ttc) }} MAD TTC.</p>
+                        {% else %}
+                        <p class="mt-0.5 text-xs leading-5 text-slate-600">Le dossier attend son premier devis. Aucune réparation ne doit commencer avant accord.</p>
+                        {% endif %}
+                    </div>
+                    <div class="self-center">
+                        {% if dossier.statut == 'pending_devis' and dossier.dernier_devis and dossier.dernier_devis.statut == 'rejected' %}
+                        <a class="inline-flex h-9 w-full items-center justify-center rounded-md bg-monster-jaune px-3 text-xs font-black text-black" href="{{ url_for('dossiers.nouveau_devis', dossier_id=dossier.id) }}">Créer version corrigée</a>
+                        {% elif dossier.statut in ['pending_devis', 'paused_pending_approval'] %}
+                        <a class="inline-flex h-9 w-full items-center justify-center rounded-md bg-monster-jaune px-3 text-xs font-black text-black" href="{{ url_for('dossiers.nouveau_devis', dossier_id=dossier.id) }}">Créer un devis</a>
+                        {% else %}
+                        <span class="inline-flex w-full items-center justify-center rounded-md bg-slate-100 px-3 py-2 text-[10px] font-black uppercase text-slate-500">Étape traitée</span>
+                        {% endif %}
+                        {% if dossier.dernier_devis %}
+                        <div class="mt-2 grid grid-cols-2 gap-2">
+                            <a class="inline-flex h-8 items-center justify-center rounded-md border border-slate-200 bg-white px-2 text-[10px] font-black uppercase text-slate-600 hover:bg-slate-50" href="{{ url_for('dossiers.voir_devis_pdf', devis_id=dossier.dernier_devis.id) }}" target="_blank" rel="noopener">Voir PDF</a>
+                            <a class="inline-flex h-8 items-center justify-center rounded-md border border-slate-200 bg-white px-2 text-[10px] font-black uppercase text-slate-600 hover:bg-slate-50" href="{{ url_for('dossiers.telecharger_devis', devis_id=dossier.dernier_devis.id) }}">Exporter</a>
+                        </div>
+                        {% endif %}
+                    </div>
+                </article>
+
+                <article class="grid gap-3 rounded-lg border p-3 {% if workflow_step == 2 %}border-monster-jaune bg-yellow-50{% else %}border-slate-200 bg-white{% endif %} lg:grid-cols-[36px_1fr_280px]">
+                    <div class="grid h-9 w-9 place-items-center rounded-full {% if dossier.dernier_devis and dossier.dernier_devis.statut == 'approved' %}bg-emerald-600 text-white{% elif workflow_step == 2 %}bg-monster-jaune text-black{% else %}bg-slate-100 text-slate-400{% endif %}">
+                        {{ mg_icon('check', 'h-4 w-4') }}
+                    </div>
+                    <div class="min-w-0">
+                        <h3 class="text-sm font-black text-slate-950">Accord client</h3>
+                        {% if dossier.dernier_devis and dossier.dernier_devis.statut == 'pending' %}
+                        <p class="mt-0.5 text-xs leading-5 text-slate-600">Devis v{{ dossier.dernier_devis.version }} en attente. Approuvez ou refusez uniquement la dernière version.</p>
+                        {% elif dossier.dernier_devis and dossier.dernier_devis.statut == 'approved' %}
+                        <p class="mt-0.5 text-xs leading-5 text-slate-600">Accord enregistré via {{ dossier.dernier_devis.mode_accord_libelle }}.</p>
+                        {% else %}
+                        <p class="mt-0.5 text-xs leading-5 text-slate-600">Cette étape sera disponible dès qu'un devis sera créé.</p>
+                        {% endif %}
+                    </div>
+                    <div>
+                        {% if dossier.dernier_devis and dossier.dernier_devis.statut == 'pending' %}
+                        <form class="grid gap-2" method="post" action="{{ url_for('dossiers.approuver', devis_id=dossier.dernier_devis.id) }}">
+                            <select class="h-9 rounded-md border border-slate-300 bg-white px-3 text-xs" name="mode_accord">
                                 <option value="telephone">Téléphone</option>
                                 <option value="signature">Signature{% if dossier.client.type == 'sntl' %} (rare){% endif %}</option>
                             </select>
-                            <label class="flex items-center gap-2 text-sm font-bold text-slate-800"><input type="checkbox" name="accord_assurance" value="1"> Accord assurance</label>
-                            <button class="h-11 rounded-md bg-emerald-600 px-4 text-sm font-black text-white" type="submit">Approuver le devis</button>
+                            <label class="flex items-center gap-2 text-xs font-bold text-slate-800"><input type="checkbox" name="accord_assurance" value="1"> Accord assurance</label>
+                            <button class="h-9 rounded-md bg-emerald-600 px-3 text-xs font-black text-white" type="submit">Approuver</button>
                         </form>
-                        <form class="mt-3 grid gap-3" method="post" action="{{ url_for('dossiers.refuser', devis_id=dossier.dernier_devis.id) }}">
-                            <input class="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm" name="motif_refus" placeholder="Motif du refus">
-                            <button class="h-11 rounded-md bg-red-600 px-4 text-sm font-black text-white" type="submit">Refuser le devis</button>
+                        <form class="mt-2 grid gap-2" method="post" action="{{ url_for('dossiers.refuser', devis_id=dossier.dernier_devis.id) }}">
+                            <input class="h-9 rounded-md border border-slate-300 bg-white px-3 text-xs" name="motif_refus" placeholder="Motif du refus">
+                            <button class="h-9 rounded-md bg-red-600 px-3 text-xs font-black text-white" type="submit">Refuser</button>
                         </form>
-                    {% elif dossier.statut == 'in_progress' and dossier.facture %}
+                        {% else %}
+                        <span class="inline-flex w-full items-center justify-center rounded-md bg-slate-100 px-3 py-2 text-[10px] font-black uppercase text-slate-500">En attente</span>
+                        {% endif %}
+                    </div>
+                </article>
+
+                <article class="grid gap-3 rounded-lg border p-3 {% if workflow_step == 3 %}border-monster-jaune bg-yellow-50{% else %}border-slate-200 bg-white{% endif %} lg:grid-cols-[36px_1fr_230px]">
+                    <div class="grid h-9 w-9 place-items-center rounded-full {% if workflow_step > 3 %}bg-emerald-600 text-white{% elif workflow_step == 3 %}bg-monster-jaune text-black{% else %}bg-slate-100 text-slate-400{% endif %}">
+                        {{ mg_icon('package', 'h-4 w-4') }}
+                    </div>
+                    <div class="min-w-0">
+                        <h3 class="text-sm font-black text-slate-950">Pièces commandées</h3>
+                        <p class="mt-0.5 text-xs leading-5 text-slate-600">Cette version ne gère pas encore le stock complet, mais l'étape reste visible pour suivre le flux atelier.</p>
+                    </div>
+                    <div class="self-center">
+                        <span class="inline-flex w-full items-center justify-center rounded-md bg-slate-100 px-3 py-2 text-[10px] font-black uppercase text-slate-500">Suivi manuel</span>
+                    </div>
+                </article>
+
+                <article class="grid gap-3 rounded-lg border p-3 {% if workflow_step == 4 %}border-monster-jaune bg-yellow-50{% else %}border-slate-200 bg-white{% endif %} lg:grid-cols-[36px_1fr_280px]">
+                    <div class="grid h-9 w-9 place-items-center rounded-full {% if workflow_step > 4 %}bg-emerald-600 text-white{% elif workflow_step == 4 %}bg-monster-jaune text-black{% else %}bg-slate-100 text-slate-400{% endif %}">
+                        {{ mg_icon('wrench', 'h-4 w-4') }}
+                    </div>
+                    <div class="min-w-0">
+                        <h3 class="text-sm font-black text-slate-950">Réparation</h3>
+                        {% if dossier.statut == 'in_progress' and dossier.facture %}
+                        <p class="mt-0.5 text-xs leading-5 text-slate-600">Reprise garantie en cours sur le même dossier pour garder la traçabilité.</p>
+                        {% elif dossier.statut == 'in_progress' %}
+                        <p class="mt-0.5 text-xs leading-5 text-slate-600">La réparation est en cours. Mettez en pause si un coût supplémentaire apparaît, ou terminez le dossier.</p>
+                        {% elif dossier.statut == 'paused_pending_approval' %}
+                        <p class="mt-0.5 text-xs leading-5 text-slate-600">Réparation en pause : un devis complémentaire est nécessaire.</p>
+                        {% else %}
+                        <p class="mt-0.5 text-xs leading-5 text-slate-600">Cette étape démarre après l'accord client.</p>
+                        {% endif %}
+                    </div>
+                    <div>
+                        {% if dossier.statut == 'in_progress' and dossier.facture %}
                         <form method="post" action="{{ url_for('dossiers.terminer', dossier_id=dossier.id) }}">
-                            <button class="h-11 w-full rounded-md bg-emerald-600 px-4 text-sm font-black text-white" type="submit">Marquer reprise garantie terminee</button>
+                            <button class="h-9 w-full rounded-md bg-emerald-600 px-3 text-xs font-black text-white" type="submit">Terminer reprise</button>
                         </form>
-                        <a class="mt-3 inline-flex h-10 w-full items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700" href="{{ url_for('factures.detail', facture_id=dossier.facture.id) }}">Voir la facture originale</a>
-                    {% elif dossier.statut == 'in_progress' %}
-                        <form class="grid gap-3" method="post" action="{{ url_for('dossiers.pause', dossier_id=dossier.id) }}">
-                            <input class="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm" name="raison" placeholder="Raison de la pause">
-                            <button class="h-11 rounded-md bg-amber-500 px-4 text-sm font-black text-black" type="submit">Pause + nouveau devis</button>
+                        <a class="mt-2 inline-flex h-8 w-full items-center justify-center rounded-md border border-slate-200 bg-white px-2 text-[10px] font-black uppercase text-slate-600 hover:bg-slate-50" href="{{ url_for('factures.detail', facture_id=dossier.facture.id) }}">Voir facture originale</a>
+                        {% elif dossier.statut == 'in_progress' %}
+                        <form class="grid gap-2" method="post" action="{{ url_for('dossiers.pause', dossier_id=dossier.id) }}">
+                            <input class="h-9 rounded-md border border-slate-300 bg-white px-3 text-xs" name="raison" placeholder="Raison de la pause">
+                            <button class="h-9 rounded-md bg-amber-500 px-3 text-xs font-black text-black" type="submit">Pause + devis</button>
                         </form>
-                        <form class="mt-3" method="post" action="{{ url_for('dossiers.terminer', dossier_id=dossier.id) }}">
-                            <button class="h-11 w-full rounded-md bg-emerald-600 px-4 text-sm font-black text-white" type="submit">Marquer terminé</button>
+                        <form class="mt-2" method="post" action="{{ url_for('dossiers.terminer', dossier_id=dossier.id) }}">
+                            <button class="h-9 w-full rounded-md bg-emerald-600 px-3 text-xs font-black text-white" type="submit">Marquer terminé</button>
                         </form>
-                    {% elif dossier.statut in statuts_facturables and not dossier.facture %}
+                        {% else %}
+                        <span class="inline-flex w-full items-center justify-center rounded-md bg-slate-100 px-3 py-2 text-[10px] font-black uppercase text-slate-500">En attente</span>
+                        {% endif %}
+                    </div>
+                </article>
+
+                <article class="grid gap-3 rounded-lg border p-3 {% if workflow_step == 5 %}border-monster-jaune bg-yellow-50{% else %}border-slate-200 bg-white{% endif %} lg:grid-cols-[36px_1fr_230px]">
+                    <div class="grid h-9 w-9 place-items-center rounded-full {% if dossier.facture %}bg-emerald-600 text-white{% elif workflow_step == 5 %}bg-monster-jaune text-black{% else %}bg-slate-100 text-slate-400{% endif %}">
+                        {{ mg_icon('receipt', 'h-4 w-4') }}
+                    </div>
+                    <div class="min-w-0">
+                        <h3 class="text-sm font-black text-slate-950">Facturation</h3>
+                        {% if dossier.facture %}
+                        <p class="mt-0.5 text-xs leading-5 text-slate-600">Facture {{ dossier.facture.numero }} générée. Statut : {{ dossier.facture.statut_libelle }}.</p>
+                        {% elif dossier.statut in statuts_facturables %}
+                        <p class="mt-0.5 text-xs leading-5 text-slate-600">Le dossier est prêt à être facturé depuis le dernier devis approuvé.</p>
+                        {% else %}
+                        <p class="mt-0.5 text-xs leading-5 text-slate-600">La facture sera disponible après la fin de réparation.</p>
+                        {% endif %}
+                    </div>
+                    <div class="self-center">
+                        {% if dossier.statut in statuts_facturables and not dossier.facture %}
                         <form method="post" action="{{ url_for('factures.generer_depuis_dossier', dossier_id=dossier.id) }}">
-                            <button class="h-11 w-full rounded-md bg-monster-jaune px-4 text-sm font-black text-black" type="submit">{% if dossier.statut == 'cancelled_billable' %}Facturer travaux effectues{% else %}Générer la facture finale{% endif %}</button>
+                            <button class="h-9 w-full rounded-md bg-monster-jaune px-3 text-xs font-black text-black" type="submit">{% if dossier.statut == 'cancelled_billable' %}Facturer travaux{% else %}Générer facture{% endif %}</button>
                         </form>
-                    {% elif dossier.statut in statuts_facturables and dossier.facture and dossier.facture.statut == 'emise' %}
+                        {% elif dossier.facture %}
+                        <a class="inline-flex h-9 w-full items-center justify-center rounded-md bg-slate-950 px-3 text-xs font-black text-white" href="{{ url_for('factures.detail', facture_id=dossier.facture.id) }}">Voir facture</a>
+                        <a class="mt-2 inline-flex h-8 w-full items-center justify-center rounded-md border border-slate-200 bg-white px-2 text-[10px] font-black uppercase text-slate-600 hover:bg-slate-50" href="{{ url_for('factures.voir_pdf', facture_id=dossier.facture.id) }}" target="_blank" rel="noopener">Voir PDF</a>
+                        {% else %}
+                        <span class="inline-flex w-full items-center justify-center rounded-md bg-slate-100 px-3 py-2 text-[10px] font-black uppercase text-slate-500">En attente</span>
+                        {% endif %}
+                    </div>
+                </article>
+
+                <article class="grid gap-3 rounded-lg border p-3 {% if workflow_step == 6 %}border-monster-jaune bg-yellow-50{% else %}border-slate-200 bg-white{% endif %} lg:grid-cols-[36px_1fr_280px]">
+                    <div class="grid h-9 w-9 place-items-center rounded-full {% if dossier.facture and dossier.facture.statut == 'reglee' %}bg-emerald-600 text-white{% elif workflow_step == 6 %}bg-monster-jaune text-black{% else %}bg-slate-100 text-slate-400{% endif %}">
+                        {{ mg_icon('truck', 'h-4 w-4') }}
+                    </div>
+                    <div class="min-w-0">
+                        <h3 class="text-sm font-black text-slate-950">Livraison et règlement</h3>
+                        {% if dossier.facture and dossier.facture.statut == 'emise' %}
+                        <p class="mt-0.5 text-xs leading-5 text-slate-600">La facture est émise. Confirmez la livraison du véhicule.</p>
+                        {% elif dossier.facture and dossier.facture.statut == 'livree' %}
+                        <p class="mt-0.5 text-xs leading-5 text-slate-600">Véhicule livré. Enregistrez le règlement pour clôturer.</p>
+                        {% elif dossier.facture and dossier.facture.statut == 'reglee' %}
+                        <p class="mt-0.5 text-xs leading-5 text-slate-600">Dossier clôturé : véhicule livré et facture réglée.</p>
+                        {% else %}
+                        <p class="mt-0.5 text-xs leading-5 text-slate-600">Disponible après génération de la facture.</p>
+                        {% endif %}
+                    </div>
+                    <div>
+                        {% if dossier.statut in statuts_facturables and dossier.facture and dossier.facture.statut == 'emise' %}
                         <form method="post" action="{{ url_for('factures.livrer', facture_id=dossier.facture.id) }}">
-                            <button class="h-11 w-full rounded-md bg-emerald-600 px-4 text-sm font-black text-white" type="submit">Marquer livré</button>
+                            <button class="h-9 w-full rounded-md bg-emerald-600 px-3 text-xs font-black text-white" type="submit">Marquer livré</button>
                         </form>
-                        <a class="mt-3 inline-flex h-10 w-full items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700" href="{{ url_for('factures.detail', facture_id=dossier.facture.id) }}">Suivre livraison & règlement</a>
-                    {% elif dossier.statut in statuts_facturables and dossier.facture and dossier.facture.statut == 'livree' %}
-                        <form class="grid gap-3" method="post" action="{{ url_for('factures.regler', facture_id=dossier.facture.id) }}">
-                            <select class="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm" name="mode_reglement">
+                        <div class="mt-2 grid grid-cols-2 gap-2">
+                            <a class="inline-flex h-8 items-center justify-center rounded-md border border-slate-200 bg-white px-2 text-[10px] font-black uppercase text-slate-600 hover:bg-slate-50" href="{{ url_for('factures.detail', facture_id=dossier.facture.id) }}">Facture</a>
+                            <a class="inline-flex h-8 items-center justify-center rounded-md border border-slate-200 bg-white px-2 text-[10px] font-black uppercase text-slate-600 hover:bg-slate-50" href="{{ url_for('factures.voir_pdf', facture_id=dossier.facture.id) }}" target="_blank" rel="noopener">PDF</a>
+                        </div>
+                        {% elif dossier.statut in statuts_facturables and dossier.facture and dossier.facture.statut == 'livree' %}
+                        <form class="grid gap-2" method="post" action="{{ url_for('factures.regler', facture_id=dossier.facture.id) }}">
+                            <select class="h-9 rounded-md border border-slate-300 bg-white px-3 text-xs" name="mode_reglement">
                                 <option value="especes">Espèces</option>
                                 <option value="cheque">Chèque</option>
                                 <option value="virement">Virement</option>
                                 <option value="carte">Carte bancaire</option>
                                 <option value="autre">Autre</option>
                             </select>
-                            <input class="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm" name="montant_reglement" type="number" min="0.01" max="{{ dossier.facture.montant_restant }}" step="0.01" required placeholder="{{ '%.2f'|format(dossier.facture.montant_restant) }} MAD">
-                            <input class="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm" name="reference_reglement" placeholder="Référence règlement">
-                            <button class="h-11 rounded-md bg-monster-jaune px-4 text-sm font-black text-black" type="submit">Enregistrer règlement</button>
+                            <input class="h-9 rounded-md border border-slate-300 bg-white px-3 text-xs" name="montant_reglement" type="number" min="0.01" max="{{ dossier.facture.montant_restant }}" step="0.01" required placeholder="{{ '%.2f'|format(dossier.facture.montant_restant) }} MAD">
+                            <input class="h-9 rounded-md border border-slate-300 bg-white px-3 text-xs" name="reference_reglement" placeholder="Référence règlement">
+                            <button class="h-9 rounded-md bg-monster-jaune px-3 text-xs font-black text-black" type="submit">Enregistrer</button>
                         </form>
-                    {% elif dossier.statut in statuts_facturables and dossier.facture %}
-                        <a class="inline-flex h-11 w-full items-center justify-center rounded-md bg-emerald-600 px-4 text-sm font-black text-white" href="{{ url_for('factures.detail', facture_id=dossier.facture.id) }}">Voir la facture</a>
-                        {% if dossier.statut == 'completed' %}
-                            <form class="mt-3 grid gap-2 border-t border-slate-200 pt-3" method="post" action="{{ url_for('dossiers.reouvrir_garantie', dossier_id=dossier.id) }}">
-                                <input class="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm" name="motif" placeholder="Motif reprise garantie">
-                                <button class="h-10 rounded-md border border-amber-300 bg-amber-50 px-4 text-sm font-black text-amber-800" type="submit">Reprendre en garantie</button>
-                            </form>
+                        <div class="mt-2 grid grid-cols-2 gap-2">
+                            <a class="inline-flex h-8 items-center justify-center rounded-md border border-slate-200 bg-white px-2 text-[10px] font-black uppercase text-slate-600 hover:bg-slate-50" href="{{ url_for('factures.detail', facture_id=dossier.facture.id) }}">Facture</a>
+                            <a class="inline-flex h-8 items-center justify-center rounded-md border border-slate-200 bg-white px-2 text-[10px] font-black uppercase text-slate-600 hover:bg-slate-50" href="{{ url_for('factures.voir_pdf', facture_id=dossier.facture.id) }}" target="_blank" rel="noopener">PDF</a>
+                        </div>
+                        {% elif dossier.facture and dossier.facture.statut == 'reglee' %}
+                        <span class="inline-flex w-full items-center justify-center rounded-md bg-emerald-100 px-3 py-2 text-[10px] font-black uppercase text-emerald-700">Clôturé</span>
+                        {% else %}
+                        <span class="inline-flex w-full items-center justify-center rounded-md bg-slate-100 px-3 py-2 text-[10px] font-black uppercase text-slate-500">En attente</span>
                         {% endif %}
-                    {% endif %}
-
-                    {% if dossier.statut not in ['completed', 'cancelled', 'cancelled_billable'] %}
-                        <form class="mt-4 flex gap-3 border-t border-slate-200 pt-4" method="post" action="{{ url_for('dossiers.annuler', dossier_id=dossier.id) }}">
-                            <input class="h-10 min-w-0 flex-1 rounded-md border border-slate-300 px-3 text-sm" name="motif" placeholder="Motif d'annulation">
-                            <button class="h-10 rounded-md border border-red-300 bg-white px-4 text-sm font-black text-red-700" type="submit">Annuler sans facture</button>
-                        </form>
-                        <form class="mt-3 grid gap-2" method="post" action="{{ url_for('dossiers.annuler_facturable', dossier_id=dossier.id) }}">
-                            <input class="h-10 rounded-md border border-orange-300 bg-white px-3 text-sm" name="motif" placeholder="Motif + travaux effectues">
-                            <button class="h-10 rounded-md bg-orange-500 px-4 text-sm font-black text-white" type="submit">Annuler + facturer travaux effectues</button>
-                        </form>
-                    {% endif %}
-                </div>
-            </div>
-        </article>
-    </div>
-</section>
-
-<section class="grid gap-5 xl:grid-cols-[1fr_0.9fr]">
-    <article class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 class="text-lg font-black text-slate-950">Devis versionnés</h2>
-        <div class="mt-4 divide-y divide-slate-200">
-            {% for devis in dossier.devis %}
-                <section class="py-4 first:pt-0">
-                    <div class="flex items-start justify-between gap-4">
-                        <div>
-                            <h3 class="font-black text-slate-950">v{{ devis.version }} - {{ devis.objet }}</h3>
-                            <p class="text-sm font-semibold text-slate-500">{{ devis.statut_libelle }}</p>
-                        </div>
-                        <div class="grid gap-2 text-right">
-                            <strong class="text-lg font-black text-slate-950">{{ "%.2f"|format(devis.montant_ttc) }} MAD</strong>
-                            <a class="inline-flex h-9 items-center justify-center rounded-md border border-slate-300 bg-white px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50"
-                               href="{{ url_for('dossiers.telecharger_devis', devis_id=devis.id) }}">Exporter Excel</a>
-                            <a class="inline-flex h-9 items-center justify-center rounded-md border border-slate-300 bg-white px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50"
-                               href="{{ url_for('dossiers.voir_devis_pdf', devis_id=devis.id) }}" target="_blank" rel="noopener">Voir PDF</a>
-                            <a class="inline-flex h-9 items-center justify-center rounded-md border border-slate-300 bg-white px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50"
-                               href="{{ url_for('dossiers.telecharger_devis_pdf', devis_id=devis.id) }}">Télécharger PDF</a>
-                        </div>
                     </div>
-                    <ul class="mt-3 space-y-1 text-sm text-slate-600">
-                        {% for ligne in devis.lignes %}
-                            <li>{{ ligne.designation }}{% if dossier.client.type != 'sntl' %} ({{ ligne.etat_piece_libelle }}){% endif %} - {{ ligne.quantite }} x {{ ligne.prix_unitaire_ht }} HT</li>
-                        {% endfor %}
-                    </ul>
-                </section>
-            {% else %}
-                <p class="py-8 text-center text-sm font-semibold text-slate-500">Aucun devis créé.</p>
-            {% endfor %}
-        </div>
-    </article>
-
-    <article class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 class="text-lg font-black text-slate-950">Journal d'actions</h2>
-        <div class="mt-4 divide-y divide-slate-200">
-            {% for action in dossier.journal|sort(attribute='created_at', reverse=True) %}
-                <article class="py-3 text-sm">
-                    <div class="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-                        <p class="font-black text-slate-950">{{ action.action }}</p>
-                        <time class="text-xs font-bold text-slate-500" datetime="{{ action.created_at.isoformat() }}">
-                            {{ action.created_at.strftime("%d/%m/%Y %H:%M") }}
-                        </time>
-                    </div>
-                    <p class="text-slate-600">{{ action.details }}</p>
                 </article>
-            {% else %}
-                <p class="text-sm font-semibold text-slate-500">Aucune action enregistrée.</p>
-            {% endfor %}
-        </div>
-    </article>
+            </div>
+
+            {% if dossier.statut not in ['completed', 'cancelled', 'cancelled_billable'] %}
+            <div class="mt-5 grid gap-3 border-t border-slate-200 pt-5 lg:grid-cols-2">
+                <form class="flex gap-3" method="post" action="{{ url_for('dossiers.annuler', dossier_id=dossier.id) }}">
+                    <input class="h-10 min-w-0 flex-1 rounded-md border border-slate-300 px-3 text-sm" name="motif" placeholder="Motif d'annulation">
+                    <button class="h-10 rounded-md border border-red-300 bg-white px-4 text-sm font-black text-red-700" type="submit">Annuler</button>
+                </form>
+                <form class="flex gap-3" method="post" action="{{ url_for('dossiers.annuler_facturable', dossier_id=dossier.id) }}">
+                    <input class="h-10 min-w-0 flex-1 rounded-md border border-orange-300 bg-white px-3 text-sm" name="motif" placeholder="Motif + travaux effectués">
+                    <button class="h-10 rounded-md bg-orange-500 px-4 text-sm font-black text-white" type="submit">Annuler + facturer</button>
+                </form>
+            </div>
+            {% elif dossier.statut == 'completed' and dossier.facture %}
+            <form class="mt-5 grid gap-2 border-t border-slate-200 pt-5 sm:grid-cols-[1fr_auto]" method="post" action="{{ url_for('dossiers.reouvrir_garantie', dossier_id=dossier.id) }}">
+                <input class="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm" name="motif" placeholder="Motif reprise garantie">
+                <button class="h-10 rounded-md border border-amber-300 bg-amber-50 px-4 text-sm font-black text-amber-800" type="submit">Reprendre en garantie</button>
+            </form>
+            {% endif %}
+        </section>
+
+        <section class="grid gap-5 xl:grid-cols-[1fr_0.9fr]">
+            <article class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                <h2 class="text-lg font-black text-slate-950">Devis versionnés</h2>
+                <div class="mt-4 divide-y divide-slate-200">
+                    {% for devis in dossier.devis %}
+                        <section class="py-4 first:pt-0">
+                            <div class="flex items-start justify-between gap-4">
+                                <div>
+                                    <h3 class="font-black text-slate-950">v{{ devis.version }} - {{ devis.objet }}</h3>
+                                    <p class="text-sm font-semibold text-slate-500">{{ devis.statut_libelle }}</p>
+                                </div>
+                                <div class="grid gap-2 text-right">
+                                    <strong class="text-lg font-black text-slate-950">{{ "%.2f"|format(devis.montant_ttc) }} MAD</strong>
+                                    <a class="inline-flex h-9 items-center justify-center rounded-md border border-slate-300 bg-white px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50" href="{{ url_for('dossiers.telecharger_devis', devis_id=devis.id) }}">Exporter Excel</a>
+                                    <a class="inline-flex h-9 items-center justify-center rounded-md border border-slate-300 bg-white px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50" href="{{ url_for('dossiers.voir_devis_pdf', devis_id=devis.id) }}" target="_blank" rel="noopener">Voir PDF</a>
+                                    <a class="inline-flex h-9 items-center justify-center rounded-md border border-slate-300 bg-white px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50" href="{{ url_for('dossiers.telecharger_devis_pdf', devis_id=devis.id) }}">Télécharger PDF</a>
+                                </div>
+                            </div>
+                            <ul class="mt-3 space-y-1 text-sm text-slate-600">
+                                {% for ligne in devis.lignes %}
+                                    <li>{{ ligne.designation }}{% if dossier.client.type != 'sntl' %} ({{ ligne.etat_piece_libelle }}){% endif %} - {{ ligne.quantite }} x {{ ligne.prix_unitaire_ht }} HT</li>
+                                {% endfor %}
+                            </ul>
+                        </section>
+                    {% else %}
+                        <p class="py-8 text-center text-sm font-semibold text-slate-500">Aucun devis créé.</p>
+                    {% endfor %}
+                </div>
+            </article>
+
+            <article class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                <h2 class="text-lg font-black text-slate-950">Journal réel</h2>
+                <div class="mt-4 divide-y divide-slate-200">
+                    {% for action in dossier.journal|sort(attribute='created_at', reverse=True) %}
+                        <article class="py-3 text-sm">
+                            <div class="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                                <p class="font-black text-slate-950">{{ action.action }}</p>
+                                <time class="text-xs font-bold text-slate-500" datetime="{{ action.created_at.isoformat() }}">{{ action.created_at.strftime("%d/%m/%Y %H:%M") }}</time>
+                            </div>
+                            <p class="text-slate-600">{{ action.details }}</p>
+                        </article>
+                    {% else %}
+                        <p class="text-sm font-semibold text-slate-500">Aucune action enregistrée.</p>
+                    {% endfor %}
+                </div>
+            </article>
+        </section>
+    </div>
 </section>
 {% endblock %}

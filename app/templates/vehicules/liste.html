@@ -1,44 +1,142 @@
 {% extends "base.html" %}
 
-{% block title %}Véhicules - Monster Garage{% endblock %}
+{% block title %}V&eacute;hicules - Monster Garage{% endblock %}
+
+{% macro vehicle_icon(name, class_name='h-4 w-4') -%}
+    {% if name == 'car' %}
+    <svg class="{{ class_name }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 17h2l-1.8-5.4A3 3 0 0 0 16.4 9H7.6a3 3 0 0 0-2.8 2.6L3 17h2"/><path d="M7 17h10"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg>
+    {% elif name == 'user' %}
+    <svg class="{{ class_name }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>
+    {% elif name == 'wrench' %}
+    <svg class="{{ class_name }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a4 4 0 0 0 5 5L11 20H6v-5l8.7-8.7Z"/></svg>
+    {% elif name == 'file' %}
+    <svg class="{{ class_name }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>
+    {% elif name == 'gauge' %}
+    <svg class="{{ class_name }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 14l4-4"/><path d="M3.3 19a9 9 0 1 1 17.4 0"/><path d="M12 3v3"/><path d="M4.2 8.5l2.6 1.5"/><path d="M19.8 8.5 17.2 10"/></svg>
+    {% else %}
+    <svg class="{{ class_name }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+    {% endif %}
+{%- endmacro %}
 
 {% block content %}
 <section class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
     <div>
         <p class="text-sm font-semibold text-slate-500">Parc client</p>
-        <h1 class="mt-1 text-3xl font-black tracking-tight text-slate-950">Véhicules</h1>
+        <h1 class="mt-1 text-3xl font-black tracking-tight text-slate-950">V&eacute;hicules</h1>
     </div>
     <a class="inline-flex h-10 items-center justify-center rounded-md bg-monster-jaune px-4 text-sm font-black text-black transition hover:bg-yellow-300 focus:outline-none focus:ring-4 focus:ring-yellow-200" href="{{ url_for('clients.nouveau') }}">Nouveau client</a>
 </section>
 
+<section class="mb-5 grid gap-3 md:grid-cols-4">
+    <article class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="flex items-center justify-between">
+            <p class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">V&eacute;hicules</p>
+            <span class="grid h-8 w-8 place-items-center rounded-md bg-slate-100 text-slate-600">{{ vehicle_icon('car') }}</span>
+        </div>
+        <p class="mt-2 text-2xl font-black text-slate-950">{{ stats.total }}</p>
+    </article>
+    <article class="rounded-lg border border-yellow-200 bg-yellow-50 p-4 shadow-sm">
+        <div class="flex items-center justify-between">
+            <p class="text-[10px] font-black uppercase tracking-[0.16em] text-yellow-700">En atelier</p>
+            <span class="grid h-8 w-8 place-items-center rounded-md bg-yellow-100 text-yellow-800">{{ vehicle_icon('wrench') }}</span>
+        </div>
+        <p class="mt-2 text-2xl font-black text-black">{{ stats.en_atelier }}</p>
+    </article>
+    <article class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="flex items-center justify-between">
+            <p class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Clients li&eacute;s</p>
+            <span class="grid h-8 w-8 place-items-center rounded-md bg-slate-100 text-slate-600">{{ vehicle_icon('user') }}</span>
+        </div>
+        <p class="mt-2 text-2xl font-black text-slate-950">{{ stats.clients }}</p>
+    </article>
+    <article class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="flex items-center justify-between">
+            <p class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Voitures</p>
+            <span class="grid h-8 w-8 place-items-center rounded-md bg-slate-100 text-slate-600">{{ vehicle_icon('gauge') }}</span>
+        </div>
+        <p class="mt-2 text-2xl font-black text-slate-950">{{ stats.voitures }}</p>
+    </article>
+</section>
+
 <section class="mb-5 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-    <form class="flex flex-col gap-3 sm:flex-row" method="get">
-        <input class="h-11 flex-1 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" type="search" name="q" value="{{ recherche }}" placeholder="Rechercher par immatriculation, marque, modèle ou client...">
-        <button class="h-11 rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50" type="submit">Rechercher</button>
+    <form class="grid gap-3 xl:grid-cols-[1fr_auto]" method="get">
+        <input class="h-11 min-w-0 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" type="search" name="q" value="{{ recherche }}" placeholder="Rechercher plaque, marque, mod&egrave;le, VIN ou client...">
+        <div class="flex flex-wrap gap-2">
+            {% for value, label in [('', 'Tous'), ('voiture', 'Voitures'), ('utilitaire', 'Utilitaires'), ('camion', 'Camions'), ('moto', 'Motos'), ('engin', 'Engins'), ('bateau', 'Bateaux')] %}
+            <button class="h-11 rounded-md border px-4 text-xs font-black uppercase tracking-wide transition {% if type_vehicule == value %}border-yellow-300 bg-yellow-100 text-black{% else %}border-slate-200 bg-white text-slate-600 hover:bg-slate-50{% endif %}" name="type" value="{{ value }}" type="submit">{{ label }}</button>
+            {% endfor %}
+            <button class="h-11 rounded-md bg-slate-950 px-4 text-xs font-black uppercase tracking-wide text-white" type="submit">Rechercher</button>
+        </div>
     </form>
 </section>
 
-<section class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-    <div class="grid grid-cols-[160px_1fr_1fr_140px] gap-4 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-wide text-slate-500">
-        <span>Immatriculation</span>
-        <span>Véhicule</span>
-        <span>Client</span>
-        <span>Kilométrage</span>
-    </div>
-    <div class="divide-y divide-slate-200">
-        {% for vehicule in vehicules %}
-            <a class="grid grid-cols-[160px_1fr_1fr_140px] gap-4 px-4 py-4 text-sm transition hover:bg-yellow-50" href="{{ url_for('clients.detail', client_id=vehicule.client.id) }}">
-                <span class="font-black text-slate-950">{{ vehicule.immatriculation }}</span>
-                <span>
-                    <strong class="block text-slate-950">{{ vehicule.marque }} {{ vehicule.modele }}</strong>
-                    <span class="text-slate-500">{{ vehicule.type_vehicule or "-" }}</span>
-                </span>
-                <span class="font-semibold text-slate-700">{{ vehicule.client.nom }}</span>
-                <span class="text-slate-600">{{ vehicule.kilometrage_actuel or "-" }} km</span>
-            </a>
-        {% else %}
-            <p class="px-4 py-8 text-center text-sm font-semibold text-slate-500">Aucun véhicule pour le moment.</p>
-        {% endfor %}
-    </div>
+<section class="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+    {% for item in resumes %}
+    {% set vehicule = item.vehicule %}
+    {% set actif = item.dossier_actif %}
+    <article class="group overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-yellow-200 hover:shadow-lg hover:shadow-slate-200/70">
+        <div class="border-b border-slate-100 bg-slate-950 px-4 py-4 text-white">
+            <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                    <p class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">{% if vehicule.type_vehicule %}{{ vehicule.type_vehicule }}{% else %}v&eacute;hicule{% endif %}</p>
+                    <h2 class="mt-1 truncate text-lg font-black">{{ vehicule.marque }} {{ vehicule.modele }}</h2>
+                </div>
+                <span class="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-white/10 text-monster-jaune">{{ vehicle_icon('car', 'h-5 w-5') }}</span>
+            </div>
+            <div class="mt-4 inline-flex rounded-md border border-white/15 bg-white px-4 py-2 font-mono text-lg font-black tracking-wide text-slate-950 shadow-sm">
+                {{ vehicule.immatriculation }}
+            </div>
+        </div>
+
+        <div class="p-4">
+            <div class="flex flex-wrap items-center gap-2">
+                {% if actif %}
+                <span class="inline-flex items-center gap-1.5 rounded-full bg-yellow-100 px-2.5 py-1 text-[10px] font-black uppercase text-yellow-800">{{ vehicle_icon('wrench', 'h-3 w-3') }} En atelier</span>
+                <a class="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase text-slate-700 hover:bg-slate-200" href="{{ url_for('dossiers.detail', dossier_id=actif.id) }}">{{ actif.numero }}</a>
+                {% else %}
+                <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase text-emerald-700">Disponible</span>
+                {% endif %}
+                {% if vehicule.type_carburant %}
+                <span class="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase text-slate-600">{{ vehicule.type_carburant }}</span>
+                {% endif %}
+            </div>
+
+            <div class="mt-4 grid gap-2 text-sm">
+                <div class="flex items-center justify-between gap-3">
+                    <span class="inline-flex items-center gap-2 font-semibold text-slate-500">{{ vehicle_icon('user') }} Client</span>
+                    <a class="truncate font-black text-slate-900 hover:text-yellow-700" href="{{ url_for('clients.detail', client_id=vehicule.client.id) }}">{{ vehicule.client.nom }}</a>
+                </div>
+                <div class="flex items-center justify-between gap-3">
+                    <span class="inline-flex items-center gap-2 font-semibold text-slate-500">{{ vehicle_icon('gauge') }} Kilom&eacute;trage</span>
+                    <span class="font-bold text-slate-800">{{ vehicule.kilometrage_actuel or "-" }}{% if vehicule.kilometrage_actuel %} km{% endif %}</span>
+                </div>
+                <div class="flex items-center justify-between gap-3">
+                    <span class="inline-flex items-center gap-2 font-semibold text-slate-500">{{ vehicle_icon('file') }} Dernier dossier</span>
+                    {% if item.dernier_dossier %}
+                    <a class="font-black text-yellow-700 hover:text-yellow-900" href="{{ url_for('dossiers.detail', dossier_id=item.dernier_dossier.id) }}">{{ item.dernier_dossier.numero }}</a>
+                    {% else %}
+                    <span class="font-bold text-slate-400">Aucun</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="mt-4 grid grid-cols-3 gap-2 border-t border-slate-100 pt-4">
+                <a class="inline-flex h-9 items-center justify-center gap-1 rounded-md bg-slate-950 px-2 text-[10px] font-black uppercase text-white" href="{{ url_for('clients.detail', client_id=vehicule.client.id) }}">{{ vehicle_icon('user', 'h-3.5 w-3.5') }} Client</a>
+                {% if actif %}
+                <a class="inline-flex h-9 items-center justify-center gap-1 rounded-md bg-monster-jaune px-2 text-[10px] font-black uppercase text-black hover:bg-yellow-300" href="{{ url_for('dossiers.detail', dossier_id=actif.id) }}">{{ vehicle_icon('wrench', 'h-3.5 w-3.5') }} Atelier</a>
+                {% else %}
+                <a class="inline-flex h-9 items-center justify-center gap-1 rounded-md border border-slate-200 bg-white px-2 text-[10px] font-black uppercase text-slate-700 hover:bg-slate-50" href="{{ url_for('dossiers.nouveau') }}">{{ vehicle_icon('file', 'h-3.5 w-3.5') }} Dossier</a>
+                {% endif %}
+                {% if item.dernier_dossier %}
+                <a class="inline-flex h-9 items-center justify-center gap-1 rounded-md border border-slate-200 bg-white px-2 text-[10px] font-black uppercase text-slate-700 hover:bg-slate-50" href="{{ url_for('dossiers.detail', dossier_id=item.dernier_dossier.id) }}">{{ vehicle_icon('file', 'h-3.5 w-3.5') }} Historique</a>
+                {% else %}
+                <span class="inline-flex h-9 items-center justify-center rounded-md border border-slate-100 bg-slate-50 px-2 text-[10px] font-black uppercase text-slate-400">Historique</span>
+                {% endif %}
+            </div>
+        </div>
+    </article>
+    {% else %}
+    <p class="rounded-lg border border-slate-200 bg-white px-4 py-8 text-center text-sm font-semibold text-slate-500 md:col-span-2 2xl:col-span-3">Aucun v&eacute;hicule pour le moment.</p>
+    {% endfor %}
 </section>
 {% endblock %}
