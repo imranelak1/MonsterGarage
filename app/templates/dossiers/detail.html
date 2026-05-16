@@ -155,8 +155,8 @@
         <section class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
             <div class="mb-3 grid gap-3 xl:grid-cols-[1fr_360px] xl:items-end">
                 <div>
-                    <h2 class="text-lg font-black text-slate-950">Timeline des actions</h2>
-                    <p class="mt-1 text-xs font-semibold text-slate-500">Actions compactes, documents utiles et notes du dossier.</p>
+                    <h2 class="text-lg font-black text-slate-950">Poste de commande</h2>
+                    <p class="mt-1 text-xs font-semibold text-slate-500">Prochaine action, documents utiles et notes du dossier.</p>
                 </div>
                 <form class="flex gap-2" method="post" action="{{ url_for('dossiers.ajouter_note', dossier_id=dossier.id) }}">
                     <input class="h-9 min-w-0 flex-1 rounded-md border border-slate-300 px-3 text-xs font-semibold outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="note" placeholder="Ajouter une note rapide...">
@@ -408,7 +408,7 @@
             </article>
 
             <article class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-                <h2 class="text-lg font-black text-slate-950">Journal réel</h2>
+                <h2 class="text-lg font-black text-slate-950">Journal d'actions</h2>
                 <div class="mt-4 divide-y divide-slate-200">
                     {% for action in dossier.journal|sort(attribute='created_at', reverse=True) %}
                         <article class="py-3 text-sm">

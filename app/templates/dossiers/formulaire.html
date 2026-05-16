@@ -239,7 +239,7 @@
         const updateClientDependentFields = () => {
             const typeClient = selectedClientType();
             assuranceBlock?.classList.toggle("hidden", typeClient !== "particulier");
-            adminBonBlock?.classList.toggle("hidden", !["sntl", "administration"].includes(typeClient));
+            adminBonBlock?.classList.toggle("hidden", typeClient !== "administration");
             sntlPresetBlock?.classList.toggle("hidden", checkedValue("mode_client") !== "nouveau" || typeClient !== "sntl");
             sntlIceBlock?.classList.toggle("hidden", checkedValue("mode_client") !== "nouveau" || typeClient !== "sntl");
             if (typeClient === "sntl") {

@@ -41,6 +41,17 @@ def connecter(client):
     return client.post("/auth/connexion", data={"login": "admin", "mot_de_passe": "admin123"})
 
 
+def assert_classeur_sans_sntl(wb):
+    values = [
+        cell.value
+        for ws in wb.worksheets
+        for row in ws.iter_rows()
+        for cell in row
+        if isinstance(cell.value, str)
+    ]
+    assert not any("SNTL" in value.upper() for value in values)
+
+
 def creer_client_vehicule(app):
     with app.app_context():
         client_db = Client(code="FLOW1", type="particulier", nom="Client Workflow", telephone="0610000000")
@@ -546,7 +557,10 @@ def test_creation_dossier_sntl_force_immatriculation_administrative(client, app)
 
     assert response.status_code == 302
     with app.app_context():
+        dossier = DossierReparation.query.first()
         vehicule = Vehicule.query.filter_by(immatriculation="2020-S-6").first()
+        assert dossier.numero_bon_sntl.isdigit()
+        assert len(dossier.numero_bon_sntl) == 12
         assert vehicule.type_immatriculation == "administrative"
 
 
@@ -588,6 +602,8 @@ def test_creation_dossier_sntl_predefini_cree_client_code_or(client, app):
         assert client_db.ice == "ICE600HAR"
         assert client_db.notes == "OR numero 85"
         assert dossier.client_id == client_db.id
+        assert dossier.numero_bon_sntl.isdigit()
+        assert len(dossier.numero_bon_sntl) == 12
         assert vehicule.type_immatriculation == "administrative"
 
 
@@ -1338,6 +1354,7 @@ def test_export_devis_excel_depuis_dossier(client, app):
     assert response.status_code == 200
     assert response.mimetype == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     wb = load_workbook(BytesIO(response.data), data_only=False)
+    assert_classeur_sans_sntl(wb)
     ws = wb.active
     assert ws["C1"].value == "MONSTER GARAGE"
     assert ws["C4"].value == "DEVIS DE REPARATION"
@@ -1366,6 +1383,7 @@ def test_export_devis_pdf_vue_et_telechargement(client, app):
     assert response.headers["Content-Disposition"].startswith("inline;")
     assert response.data.startswith(b"%PDF")
     assert b"MONSTER GARAGE" in response.data
+    assert b"SNTL" not in response.data
 
     download = client.get(f"/dossiers/devis/{devis_id}/pdf/telecharger")
 
@@ -1386,6 +1404,7 @@ def test_export_facture_particulier_excel(client, app):
 
     assert response.status_code == 200
     wb = load_workbook(BytesIO(response.data), data_only=False)
+    assert_classeur_sans_sntl(wb)
     ws = wb.active
     assert ws["C4"].value == "FACTURE"
     assert ws["G4"].value.startswith("FA-")
@@ -1418,6 +1437,7 @@ def test_export_facture_pdf_vue_et_telechargement(client, app):
     assert response.headers["Content-Disposition"].startswith("inline;")
     assert response.data.startswith(b"%PDF")
     assert b"FACTURE" in response.data
+    assert b"SNTL" not in response.data
 
     download = client.get(f"/factures/{facture_id}/pdf/telecharger")
 
@@ -1484,16 +1504,33 @@ def test_export_facture_sntl_ajoute_commission(client, app):
     devis_response = client.get(f"/dossiers/devis/{devis_id}/telecharger")
     devis_ws = load_workbook(BytesIO(devis_response.data), data_only=False).active
     devis_values = [cell.value for row in devis_ws.iter_rows() for cell in row if cell.value is not None]
-    assert devis_ws["C4"].value == "DEVIS SNTL"
+    assert devis_ws["A1"].value == "MONSTER GARAGE"
+    assert devis_ws["D11"].value == "Devis N°"
+    assert devis_ws["E11"].value.endswith("-V1")
+    assert devis_ws["C15"].value == "La Société Nationale des Transports et de la Logistique (SNTL)"
     assert "ETAT" not in devis_values
-    assert devis_ws["A7"].value == "Partenaire"
-    assert devis_ws["C7"].value == "Véhicule"
-    assert devis_ws["B15"].value == "003524622000063"
-    assert devis_ws["D8"].value == "J207789"
-    assert devis_ws["D12"].value == "260429000021"
-    assert devis_ws["E21"].value == "Quantité"
-    assert devis_ws["E22"].value == 1
-    assert devis_ws["B22"].value == "PLAQUETTE DE FREIN"
+    assert devis_ws["B18"].value == "Partenaire"
+    assert devis_ws["D18"].value == "Véhicule"
+    assert devis_ws["C26"].value == "003524622000063"
+    assert devis_ws["E19"].value == "0207789 - J"
+    assert devis_ws["E23"].value == "260429000021"
+    assert devis_ws["E31"].value == "Quantité"
+    assert devis_ws["E32"].value == 1
+    assert devis_ws["C32"].value == "PLAQUETTE DE FREIN"
+    assert devis_ws["B42"].value == "Montant Total article HT"
+    assert devis_ws["G42"].value == 874.5
+    assert devis_ws["B43"].value == "Main d'œuvre*"
+    assert devis_ws["G43"].value == 125.5
+    devis_pdf = client.get(f"/dossiers/devis/{devis_id}/pdf")
+    assert devis_pdf.status_code == 200
+    assert devis_pdf.data.startswith(b"%PDF")
+    assert b"Devis N" in devis_pdf.data
+    assert b"SNTL" in devis_pdf.data
+    assert b"Partenaire" in devis_pdf.data
+    assert b"Matricule" in devis_pdf.data
+    assert b"0207789 - J" in devis_pdf.data
+    assert b"ETAT" not in devis_pdf.data
+    assert b"Commission SNTL" not in devis_pdf.data
     client.post(f"/dossiers/devis/{devis_id}/approuver", data={"mode_accord": "telephone"})
     client.post(f"/dossiers/{dossier_id}/terminer")
     client.post(f"/factures/dossiers/{dossier_id}/generer")
@@ -1505,47 +1542,63 @@ def test_export_facture_sntl_ajoute_commission(client, app):
     assert response.status_code == 200
     wb = load_workbook(BytesIO(response.data), data_only=False)
     ws = wb.active
-    assert ws["C1"].value == "MONSTER GARAGE"
-    assert ws["C4"].value == "FACTURE SNTL"
-    assert ws["A7"].value == "Partenaire"
-    assert ws["C7"].value == "Véhicule"
-    assert ws["A8"].value == "N° Agrément SNTL"
-    assert ws["B8"].value == "3108"
-    assert ws["A15"].value == "ICE"
-    assert ws["B15"].value == "003524622000063"
-    assert ws["C8"].value == "Matricule"
-    assert ws["D8"].value == "J207789"
-    assert ws["C9"].value == "Marque et modèle"
-    assert ws["D9"].value == "FORD TRANSIT"
-    assert ws["C11"].value == "Administration"
-    assert ws["D11"].value == "COMMUNE HARBIL"
-    assert ws["D12"].value == "260429000021"
+    assert ws["A1"].value == "MONSTER GARAGE"
+    assert ws["D11"].value == "Facture N°"
+    assert ws["E11"].value.startswith("FA-")
+    assert ws["F11"].value == "Date facture:"
+    assert ws["C15"].value == "La Société Nationale des Transports et de la Logistique (SNTL)"
+    assert ws["B18"].value == "Partenaire"
+    assert ws["D18"].value == "Véhicule"
+    assert ws["B19"].value == "N° Agrément SNTL"
+    assert ws["C19"].value == "3108"
+    assert ws["B26"].value == "ICE"
+    assert ws["C26"].value == "003524622000063"
+    assert ws["D19"].value == "Matricule"
+    assert ws["E19"].value == "0207789 - J"
+    assert ws["D20"].value == "Marque et modèle"
+    assert ws["E20"].value == "FORD TRANSIT"
+    assert ws["D22"].value == "Administration"
+    assert ws["E22"].value == "COMMUNE HARBIL"
+    assert ws["E23"].value == "260429000021"
     assert ws.freeze_panes is None
     values = [cell.value for row in ws.iter_rows() for cell in row if cell.value]
     assert "ETAT" not in values
     assert "ICE-SNTL-001" not in values
-    assert ws["A21"].value == "Référence article"
-    assert ws["B21"].value == "Désignation Article"
-    assert ws["E21"].value == "Quantité"
-    assert ws["F21"].value == "PU HT"
-    assert ws["G21"].value == "Total HT"
-    assert ws["A22"].value == "REF - N001"
-    assert ws["B22"].value == "PLAQUETTE DE FREIN"
-    assert ws["E22"].value == 1
-    assert ws["F22"].value == 874.5
-    assert ws["G22"].value == 874.5
-    assert ws["A33"].value == "Main d'œuvre*"
-    assert ws["G33"].value == 125.5
-    assert ws["G34"].value == 1000
-    assert ws["G35"].value == 200
-    assert ws["G36"].value == 1200
-    assert ws["G37"].value == 100
-    assert ws["G38"].value == 20
-    assert ws["G39"].value == 1080
+    assert ws["B31"].value == "Référence article"
+    assert ws["C31"].value == "Désignation Article"
+    assert ws["E31"].value == "Quantité"
+    assert ws["F31"].value == "PU HT"
+    assert ws["G31"].value == "Total HT"
+    assert ws["B32"].value == "REF - N001"
+    assert ws["C32"].value == "PLAQUETTE DE FREIN"
+    assert ws["E32"].value == 1
+    assert ws["F32"].value == 874.5
+    assert ws["G32"].value == 874.5
+    assert ws["B43"].value == "Main d'œuvre*"
+    assert ws["G43"].value == 125.5
+    assert ws["G44"].value == 1000
+    assert ws["G45"].value == 200
+    assert ws["G46"].value == 1200
+    assert ws["G47"].value == 100
+    assert ws["G48"].value == 20
+    assert ws["G49"].value == 1080
     assert "Commission SNTL (1x10%) (4)" in values
     assert "Montant Net à régler (3-4-5)" in values
+    assert ws["B51"].value.startswith("Arrêté la présente facture")
+    assert ws["E54"].value == "Cachet et signature"
     assert 874.5 in values
     assert 200 in values
+    facture_pdf = client.get(f"/factures/{facture_id}/pdf")
+    assert facture_pdf.status_code == 200
+    assert facture_pdf.data.startswith(b"%PDF")
+    assert b"Facture N" in facture_pdf.data
+    assert b"SNTL" in facture_pdf.data
+    assert b"Partenaire" in facture_pdf.data
+    assert b"Matricule" in facture_pdf.data
+    assert b"0207789 - J" in facture_pdf.data
+    assert b"Commission SNTL" in facture_pdf.data
+    assert b"Montant Net" in facture_pdf.data
+    assert b"ETAT" not in facture_pdf.data
 
 
 def test_export_releve_client_excel(client, app):
@@ -1587,6 +1640,7 @@ def test_export_releve_client_excel(client, app):
 
     assert response.status_code == 200
     wb = load_workbook(BytesIO(response.data), data_only=False)
+    assert_classeur_sans_sntl(wb)
     ws = wb.active
     assert ws["A9"].value == "N FACTURE"
     assert ws["D9"].value == "MONTANT FACTURE"

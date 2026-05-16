@@ -9,6 +9,7 @@ from app.services.dossiers import (
     annuler_dossier,
     approuver_devis,
     creer_devis,
+    normaliser_numero_bon_sntl,
     generer_numero_dossier,
     journaliser,
     mettre_en_pause,
@@ -107,6 +108,17 @@ def nouveau():
             flash(str(erreur), "danger")
             return render_template("dossiers/formulaire.html", clients=clients, vehicules=vehicules, sntl_presets=SNTL_CLIENTS_PREDEFINIS)
 
+        try:
+            numero_bon_sntl = (
+                normaliser_numero_bon_sntl(request.form.get("numero_bon_sntl"))
+                if client.type == "sntl"
+                else request.form.get("numero_bon_sntl", "").strip()
+            )
+        except RegleMetierErreur as erreur:
+            db.session.rollback()
+            flash(str(erreur), "danger")
+            return render_template("dossiers/formulaire.html", clients=clients, vehicules=vehicules, sntl_presets=SNTL_CLIENTS_PREDEFINIS)
+
         dossier = DossierReparation(
             numero=generer_numero_dossier(),
             client_id=client.id,
@@ -115,7 +127,7 @@ def nouveau():
             demande_client=demande_client,
             diagnostic_initial=request.form.get("diagnostic_initial", "").strip(),
             assurance_nom=request.form.get("assurance_nom", "").strip() if client.type == "particulier" else "",
-            numero_bon_sntl=request.form.get("numero_bon_sntl", "").strip(),
+            numero_bon_sntl=numero_bon_sntl,
             kilometrage_entree=_int_ou_none(request.form.get("kilometrage_entree")),
             notes=request.form.get("notes", "").strip(),
         )

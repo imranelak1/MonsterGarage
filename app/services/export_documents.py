@@ -26,6 +26,7 @@ _AMBRE_PALE = "FFFFF7CC"
 _VERT_PALE = "FFEAF7EE"
 _ROUGE_PALE = "FFFFECEC"
 _LOGO_PATH = Path(__file__).resolve().parent.parent / "static" / "img" / "logo_monster_garage.png"
+_SNTL_FONT = "Aptos Narrow"
 
 
 def exporter_devis_excel(devis: DevisReparation) -> bytes:
@@ -252,13 +253,12 @@ def _build_sntl_official_document(
     entreprise = obtenir_entreprise()
     tva = _param_percent("taux_tva", Decimal("20"))
     commission = _param_percent("taux_commission_sntl", Decimal("10"))
-    row_offset = 5
 
-    _build_header(ws, titre, numero, date_document)
+    _build_sntl_official_header(ws, titre, numero, date_document)
 
-    _sntl_section_header(ws, f"A{2 + row_offset}:B{2 + row_offset}", "Partenaire")
-    _sntl_section_header(ws, f"C{2 + row_offset}:D{2 + row_offset}", "Véhicule")
-    _sntl_section_header(ws, f"E{2 + row_offset}:G{2 + row_offset}", "Partenaire")
+    _sntl_section_header(ws, "B18:C18", "Partenaire")
+    _sntl_section_header(ws, "D18:E18", "Véhicule")
+    _sntl_section_header(ws, "F18:G18", "Partenaire")
 
     partenaire_rows = [
         ("N° Agrément SNTL", entreprise.agrement_sntl),
@@ -271,50 +271,54 @@ def _build_sntl_official_document(
         ("ICE", entreprise.ice),
         ("N° RIB", entreprise.rib),
     ]
-    for row, (label, value) in enumerate(partenaire_rows, 3 + row_offset):
-        _sntl_label_value(ws, row, 1, label, value)
+    for row, (label, value) in enumerate(partenaire_rows, 19):
+        _sntl_label_value(ws, row, 2, label, value)
 
     vehicle_rows = [
-        ("Matricule", vehicule.immatriculation),
+        ("Matricule", _format_sntl_matricule(vehicule.immatriculation)),
         ("Marque et modèle", f"{vehicule.marque} {vehicule.modele}".upper()),
         ("Kilométrage", dossier.kilometrage_entree or vehicule.kilometrage_actuel),
         ("Administration", (client.administration_rattachee or client.nom).upper()),
         ("N° de bon", _sntl_bon_number(dossier, client)),
     ]
-    for row, (label, value) in enumerate(vehicle_rows, 3 + row_offset):
-        _sntl_label_value(ws, row, 3, label, value)
+    for row, (label, value) in enumerate(vehicle_rows, 19):
+        _sntl_label_value(ws, row, 4, label, value)
 
-    _sntl_label_value(ws, 3 + row_offset, 5, "N° Accord SNTL", "")
-    ws.merge_cells(f"F{3 + row_offset}:G{3 + row_offset}")
-    _style_range(ws, 3 + row_offset, 5, 3 + row_offset, 7, border=_border())
+    ws.cell(19, 6, "N° Accord SNTL")
+    ws.cell(19, 6).font = _font(name=_SNTL_FONT, size=11)
+    ws.cell(19, 6).alignment = _align(wrap=True)
+    _style_range(ws, 19, 6, 19, 7, border=_border())
 
     article_lines, labor_total = _split_sntl_lines(devis.lignes)
-    article_start = 17 + row_offset
+    article_start = 32
     min_article_rows = 10
     article_rows_count = max(min_article_rows, len(article_lines))
     table_header_row = article_start - 1
     headers = ["Référence article", "Désignation Article", "Quantité", "PU HT", "Total HT"]
-    columns = [1, 2, 5, 6, 7]
+    columns = [2, 3, 5, 6, 7]
     for col, header in zip(columns, headers):
         cell = ws.cell(table_header_row, col, header)
-        cell.font = _font(bold=False)
+        cell.font = _font(name=_SNTL_FONT, size=12)
         cell.alignment = _align("center")
         cell.border = _border()
-    ws.merge_cells(start_row=table_header_row, start_column=2, end_row=table_header_row, end_column=4)
+    ws.merge_cells(start_row=table_header_row, start_column=3, end_row=table_header_row, end_column=4)
+    _style_range(ws, table_header_row, 2, table_header_row, 7, border=_border())
 
     article_total = Decimal("0.00")
     for offset in range(article_rows_count):
         row = article_start + offset
-        for col in range(1, 8):
+        ws.row_dimensions[row].height = 15.75
+        for col in range(2, 8):
             ws.cell(row, col).border = _border()
             ws.cell(row, col).alignment = _align("center", wrap=True)
-        ws.merge_cells(start_row=row, start_column=2, end_row=row, end_column=4)
+            ws.cell(row, col).font = _font(name=_SNTL_FONT, size=12)
+        ws.merge_cells(start_row=row, start_column=3, end_row=row, end_column=4)
         if offset >= len(article_lines):
             continue
         ligne = article_lines[offset]
         article_total += Decimal(str(ligne.total_ht or 0))
-        ws.cell(row, 1, f"REF - N{offset + 1:03d}")
-        ws.cell(row, 2, ligne.designation.upper())
+        ws.cell(row, 2, f"REF - N{offset + 1:03d}")
+        ws.cell(row, 3, ligne.designation.upper())
         ws.cell(row, 5, _money(ligne.quantite))
         ws.cell(row, 6, _money(ligne.prix_unitaire_ht))
         ws.cell(row, 7, _money(ligne.total_ht))
@@ -331,27 +335,31 @@ def _build_sntl_official_document(
     net_a_regler = (montant_ttc - commission_sntl - tva_commission).quantize(Decimal("0.01"))
 
     _sntl_total_row(ws, totals_start, "Montant Total article HT", article_total)
-    _sntl_total_row(ws, totals_start + 1, "Main d'œuvre*", labor_total)
+    _sntl_total_row(ws, totals_start + 1, "Main d'œuvre*", labor_total, label_end_col=4)
     _sntl_total_row(ws, totals_start + 2, "Montant Total article HT (1)", total_ht)
-    _sntl_total_row(ws, totals_start + 3, f"TVA {int(tva * 100)}% (2)", montant_tva, rate=f"{int(tva * 100)}%")
+    _sntl_total_row(ws, totals_start + 3, f"TVA {int(tva * 100)}% (2)", montant_tva, rate=tva)
     _sntl_total_row(ws, totals_start + 4, "Montant Total TTC (1+2) (3)", montant_ttc)
     if include_commission:
-        _sntl_total_row(ws, totals_start + 5, f"Commission SNTL (1x{int(commission * 100)}%) (4)", commission_sntl, rate=f"{int(commission * 100)}%")
-        _sntl_total_row(ws, totals_start + 6, f"TVA {int(tva * 100)}% sur la comission (4x{int(tva * 100)}%) (5)", tva_commission, rate=f"{int(tva * 100)}%")
+        _sntl_total_row(ws, totals_start + 5, f"Commission SNTL (1x{int(commission * 100)}%) (4)", commission_sntl, rate=commission)
+        _sntl_total_row(ws, totals_start + 6, f"TVA {int(tva * 100)}% sur la comission (4x{int(tva * 100)}%) (5)", tva_commission, rate=tva)
         _sntl_total_row(ws, totals_start + 7, "Montant Net à régler (3-4-5)", net_a_regler, bold_value=True)
 
-    phrase_row = totals_start + (10 if include_commission else 7)
-    ws.merge_cells(start_row=phrase_row, start_column=1, end_row=phrase_row, end_column=7)
-    ws.cell(
-        phrase_row,
-        1,
-        f"Arrêté la présente facture à la somme de {_amount_to_french(montant_ttc)} TTC",
-    )
-    ws.cell(phrase_row, 1).alignment = _align("left", wrap=True)
-    ws.cell(phrase_row, 1).font = _font(size=10)
+    phrase_row = totals_start + (9 if include_commission else 7)
+    phrase_subject = "la présente facture" if "FACTURE" in titre.upper() else "le présent devis"
+    ws.cell(phrase_row, 2, f"Arrêté {phrase_subject} à la somme de {_capitalize(_amount_to_french(montant_ttc))} TTC")
+    ws.cell(phrase_row, 2).alignment = _align(wrap=True)
+    ws.cell(phrase_row, 2).font = _font(name=_SNTL_FONT, size=12)
 
-    ws.print_area = f"A1:G{phrase_row + 2}"
-    _set_print_options(ws)
+    signature_row = phrase_row + 3
+    ws.cell(signature_row, 5, "Cachet et signature")
+    ws.cell(signature_row, 5).font = _font(name=_SNTL_FONT, size=12)
+    ws.cell(signature_row, 5).alignment = _align()
+
+    footnote_row = phrase_row + 8
+    ws.cell(footnote_row, 2, "* Non valable pour les bons ateliers ''A\"")
+    ws.cell(footnote_row, 2).font = _font(name=_SNTL_FONT, size=12)
+
+    ws.print_area = f"A1:G{footnote_row}"
 
 
 def _build_document_reparation(
@@ -607,24 +615,59 @@ def _document_setup(ws, widths=None) -> None:
 
 
 def _document_setup_sntl(ws) -> None:
-    widths = [18, 44, 18, 20, 16, 18, 18, 10]
+    widths = [2.71, 20.14, 28.43, 19.29, 21.29, 21.0, 18.14, 0.29, 11.57]
     for index, width in enumerate(widths, 1):
         ws.column_dimensions[get_column_letter(index)].width = width
-    ws.sheet_view.showGridLines = True
     ws.page_setup.orientation = "portrait"
-    ws.page_setup.fitToWidth = 1
-    ws.page_margins.left = 0.2
-    ws.page_margins.right = 0.2
-    ws.page_margins.top = 0.25
-    ws.page_margins.bottom = 0.25
+    ws.page_setup.paperSize = 9
+    ws.page_setup.scale = 62
+    ws.page_margins.left = 0.7
+    ws.page_margins.right = 0.7
+    ws.page_margins.top = 0.75
+    ws.page_margins.bottom = 0.75
+
+
+def _build_sntl_official_header(ws, titre: str, numero: str, date_document) -> None:
+    ws.merge_cells("A1:H3")
+    ws["A1"].value = "MONSTER GARAGE"
+    ws["A1"].font = _font(name=_SNTL_FONT, bold=True, italic=True, size=48)
+    ws["A1"].alignment = _align("left")
+    ws.row_dimensions[3].height = 36.75
+    medium = Side(style="medium", color=_NOIR)
+    for cell in ws[3][0:8]:
+        cell.border = Border(bottom=medium)
+
+    label = "Facture N°" if "FACTURE" in titre.upper() else "Devis N°"
+    date_label = "Date facture:" if "FACTURE" in titre.upper() else "Date devis:"
+    ws["D11"].value = label
+    ws["E11"].value = numero
+    ws["F11"].value = date_label
+    ws["G11"].value = _date_value(date_document)
+    ws["G11"].number_format = "dd/mm/yyyy"
+    ws.row_dimensions[11].height = 18.75
+    for cell_ref in ("D11", "E11", "F11", "G11"):
+        ws[cell_ref].font = _font(name=_SNTL_FONT, bold=True, size=14)
+        ws[cell_ref].alignment = _align("center" if cell_ref in {"E11", "G11"} else "left")
+
+    ws.merge_cells("D13:E13")
+    ws["D13"].value = "A"
+    ws["D13"].font = _font(name=_SNTL_FONT, size=11)
+    ws["D13"].alignment = _align("center")
+
+    ws.merge_cells("C15:F15")
+    ws["C15"].value = "La Société Nationale des Transports et de la Logistique (SNTL)"
+    ws["C15"].font = _font(name=_SNTL_FONT, bold=True, size=18)
+    ws["C15"].alignment = _align("center")
+    ws.row_dimensions[15].height = 24
 
 
 def _sntl_section_header(ws, cell_range: str, title: str) -> None:
     ws.merge_cells(cell_range)
     cell = ws[cell_range.split(":")[0]]
     cell.value = title
-    cell.font = _font(bold=True)
+    cell.font = _font(name=_SNTL_FONT, bold=True, size=12)
     cell.alignment = _align("center")
+    cell.parent.row_dimensions[cell.row].height = 15.75
     for row in ws[cell_range]:
         for item in row:
             item.border = _border()
@@ -633,25 +676,40 @@ def _sntl_section_header(ws, cell_range: str, title: str) -> None:
 def _sntl_label_value(ws, row: int, col: int, label: str, value) -> None:
     ws.cell(row, col, label)
     ws.cell(row, col + 1, _display(value))
+    ws.cell(row, col).font = _font(name=_SNTL_FONT, size=11)
+    ws.cell(row, col + 1).font = _font(name=_SNTL_FONT, bold=True, size=11)
     ws.cell(row, col).alignment = _align("left", wrap=True)
     ws.cell(row, col + 1).alignment = _align("left", wrap=True)
-    ws.cell(row, col + 1).font = _font(bold=True)
     _style_range(ws, row, col, row, col + 1, border=_border())
 
 
-def _sntl_total_row(ws, row: int, label: str, value, *, rate: str | None = None, bold_value: bool = False) -> None:
-    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=6)
-    ws.cell(row, 1, label)
+def _sntl_total_row(
+    ws,
+    row: int,
+    label: str,
+    value,
+    *,
+    rate: Decimal | None = None,
+    bold_value: bool = False,
+    label_end_col: int = 6,
+) -> None:
+    ws.row_dimensions[row].height = 15.75
+    ws.merge_cells(start_row=row, start_column=2, end_row=row, end_column=label_end_col)
+    ws.cell(row, 2, label)
     ws.cell(row, 7, _money(value))
-    ws.cell(row, 1).alignment = _align("right")
+    ws.cell(row, 2).alignment = _align("right" if label_end_col == 6 else "center")
     ws.cell(row, 7).alignment = _align("right")
     ws.cell(row, 7).number_format = '#,##0.00'
+    ws.cell(row, 2).font = _font(name=_SNTL_FONT, size=12)
+    ws.cell(row, 7).font = _font(name=_SNTL_FONT, bold=True, size=12)
     if bold_value:
-        ws.cell(row, 7).font = _font(bold=True, color="FF0000FF")
+        ws.cell(row, 7).font = _font(name=_SNTL_FONT, bold=True, size=12, color="FF0000FF")
     if rate:
-        ws.cell(row, 8, rate)
-        ws.cell(row, 8).alignment = _align("center")
-    _style_range(ws, row, 1, row, 7, border=_border())
+        ws.cell(row, 9, float(rate))
+        ws.cell(row, 9).number_format = "0%"
+        ws.cell(row, 9).font = _font(name=_SNTL_FONT, size=12)
+        ws.cell(row, 9).alignment = _align("center")
+    _style_range(ws, row, 2, row, 7, border=_border())
 
 
 def _split_sntl_lines(lines) -> tuple[list, Decimal]:
@@ -666,8 +724,24 @@ def _split_sntl_lines(lines) -> tuple[list, Decimal]:
 
 
 def _is_labor_line(designation: str) -> bool:
-    normalized = (designation or "").lower().replace("œ", "oe")
+    normalized = (designation or "").lower().replace("\u0153", "oe").replace("Å“", "oe")
     return "main" in normalized and ("oeuvre" in normalized or "d'oeuvre" in normalized or "d oeuvre" in normalized)
+
+
+def _format_sntl_matricule(value: object) -> str:
+    raw = str(value or "").strip().upper()
+    compact = re.sub(r"\s+", "", raw)
+    match = re.fullmatch(r"([A-Z])[- ]?(\d+)", compact)
+    if match:
+        letter, number = match.groups()
+        return f"{number.zfill(7)} - {letter}"
+
+    match = re.fullmatch(r"(\d+)[- ]?([A-Z])", compact)
+    if match:
+        number, letter = match.groups()
+        return f"{number.zfill(7)} - {letter}"
+
+    return raw
 
 
 def _sntl_bon_number(dossier, client) -> str:
@@ -847,6 +921,10 @@ def _number_to_french(number: int) -> str:
     return " ".join(chunks)
 
 
+def _capitalize(value: str) -> str:
+    return value[:1].upper() + value[1:] if value else value
+
+
 def _safe_sheet_title(value: str) -> str:
     return re.sub(r"[\[\]\:\*\?\/\\]", "-", value)[:31] or "DOCUMENT"
 
@@ -856,8 +934,8 @@ def _safe_filename(value: str) -> str:
     return cleaned or "document.xlsx"
 
 
-def _font(*, bold=False, size=10, color=_NOIR, name="Calibri") -> Font:
-    return Font(name=name, bold=bold, size=size, color=color)
+def _font(*, bold=False, italic=False, size=10, color=_NOIR, name="Calibri") -> Font:
+    return Font(name=name, bold=bold, italic=italic, size=size, color=color)
 
 
 def _fill(color: str) -> PatternFill:

@@ -4,7 +4,7 @@ from flask_login import current_user
 
 from app.extensions import db
 from app.models import DossierReparation, FactureReparation
-from app.services.dossiers import RegleMetierErreur, journaliser
+from app.services.dossiers import RegleMetierErreur, journaliser, normaliser_numero_bon_sntl
 
 
 def generer_numero_facture() -> str:
@@ -22,6 +22,9 @@ def generer_facture(dossier: DossierReparation) -> FactureReparation:
     devis = dossier.dernier_devis_approuve
     if not devis:
         raise RegleMetierErreur("Impossible de facturer sans devis approuve.")
+
+    if dossier.client.type == "sntl" and not dossier.numero_bon_sntl:
+        dossier.numero_bon_sntl = normaliser_numero_bon_sntl(None)
 
     facture = FactureReparation(
         numero=generer_numero_facture(),
