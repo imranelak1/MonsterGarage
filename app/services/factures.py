@@ -3,7 +3,7 @@ from decimal import Decimal, InvalidOperation
 from flask_login import current_user
 
 from app.extensions import db
-from app.models import DossierReparation, FactureReparation
+from app.models import DossierReparation, FactureReparation, ReglementFacture
 from app.services.dossiers import RegleMetierErreur, journaliser, normaliser_numero_bon_sntl
 
 
@@ -71,6 +71,15 @@ def enregistrer_reglement(facture: FactureReparation, mode_reglement: str, monta
     facture.montant_regle = (Decimal(str(facture.montant_regle or 0)) + montant_reglement).quantize(Decimal("0.01"))
     facture.mode_reglement = mode_reglement
     facture.reference_reglement = reference.strip()
+    db.session.add(
+        ReglementFacture(
+            facture_id=facture.id,
+            created_by_id=current_user.id,
+            montant=montant_reglement,
+            mode_reglement=mode_reglement,
+            reference=reference.strip(),
+        )
+    )
 
     if facture.montant_regle >= facture.montant_ttc:
         facture.statut = "reglee"

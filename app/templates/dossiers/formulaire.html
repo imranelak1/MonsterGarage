@@ -3,6 +3,7 @@
 {% block title %}Nouvelle prise en charge - Monster Garage{% endblock %}
 
 {% block content %}
+{% set f = form_data if form_data is defined else {} %}
 <section class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
     <div>
         <p class="text-sm font-semibold text-slate-500">Atelier</p>
@@ -170,27 +171,55 @@
     </section>
 
     <section class="border-t border-slate-200 pt-5">
+        <h2 class="text-lg font-black text-slate-950">Pilotage du dossier</h2>
+        <p class="mt-1 text-sm text-slate-500">Attribuez le dossier et fixez le niveau d'urgence des la prise en charge.</p>
+        <div class="mt-4 grid gap-4 md:grid-cols-3">
+            <label class="grid gap-2 text-sm font-bold text-slate-800">
+                Responsable
+                <select class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="responsable_id">
+                    {% for utilisateur in utilisateurs %}
+                        <option value="{{ utilisateur.id }}" {% if (f.get('responsable_id') or current_user.id|string) == utilisateur.id|string %}selected{% endif %}>{{ utilisateur.nom_complet }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label class="grid gap-2 text-sm font-bold text-slate-800">
+                Priorite
+                <select class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="priorite">
+                    <option value="basse" {% if f.get('priorite') == 'basse' %}selected{% endif %}>Basse</option>
+                    <option value="normale" {% if not f.get('priorite') or f.get('priorite') == 'normale' %}selected{% endif %}>Normale</option>
+                    <option value="haute" {% if f.get('priorite') == 'haute' %}selected{% endif %}>Haute</option>
+                    <option value="urgente" {% if f.get('priorite') == 'urgente' %}selected{% endif %}>Urgente</option>
+                </select>
+            </label>
+            <label class="grid gap-2 text-sm font-bold text-slate-800">
+                Date promise
+                <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" type="date" name="date_promesse" value="{{ f.get('date_promesse', '') }}">
+            </label>
+        </div>
+    </section>
+
+    <section class="border-t border-slate-200 pt-5">
         <h2 class="text-lg font-black text-slate-950">Demande atelier</h2>
         <div class="mt-4 grid gap-4">
             <label class="grid gap-2 text-sm font-bold text-slate-800">
                 Demande client / panne constatée
-                <textarea class="min-h-28 rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="demande_client" required></textarea>
+                <textarea class="min-h-28 rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="demande_client" required>{{ f.get('demande_client', '') }}</textarea>
             </label>
             <label class="grid gap-2 text-sm font-bold text-slate-800">
                 Diagnostic initial
-                <textarea class="min-h-24 rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="diagnostic_initial"></textarea>
+                <textarea class="min-h-24 rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="diagnostic_initial">{{ f.get('diagnostic_initial', '') }}</textarea>
             </label>
             <label class="grid gap-2 text-sm font-bold text-slate-800">
                 Kilométrage entrée
-                <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" type="number" name="kilometrage_entree">
+                <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" type="number" name="kilometrage_entree" value="{{ f.get('kilometrage_entree', '') }}">
             </label>
             <label class="hidden grid gap-2 text-sm font-bold text-slate-800" data-admin-bon>
                 N° bon / OR
-                <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="numero_bon_sntl" placeholder="Ex : 260429000021">
+                <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="numero_bon_sntl" value="{{ f.get('numero_bon_sntl', '') }}" placeholder="Ex : 260429000021">
             </label>
             <label class="grid gap-2 text-sm font-bold text-slate-800">
                 Notes internes
-                <textarea class="min-h-20 rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="notes"></textarea>
+                <textarea class="min-h-20 rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="notes">{{ f.get('notes', '') }}</textarea>
             </label>
         </div>
     </section>

@@ -84,6 +84,24 @@
 </section>
 
 <section class="mt-5 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <h2 class="text-lg font-black text-slate-950">Historique des reglements</h2>
+    <div class="mt-4 divide-y divide-slate-200">
+        {% for reglement in facture.reglements|sort(attribute='created_at', reverse=True) %}
+            <article class="grid gap-2 py-3 text-sm sm:grid-cols-[1fr_160px_160px]">
+                <div>
+                    <p class="font-black text-slate-950">{{ "%.2f"|format(reglement.montant) }} MAD</p>
+                    <p class="text-xs font-semibold text-slate-500">{{ reglement.reference or "Sans reference" }}</p>
+                </div>
+                <span class="font-semibold text-slate-700">{{ reglement.mode_reglement_libelle }}</span>
+                <time class="font-semibold text-slate-500" datetime="{{ reglement.created_at.isoformat() }}">{{ reglement.created_at.strftime("%d/%m/%Y %H:%M") }}</time>
+            </article>
+        {% else %}
+            <p class="py-6 text-center text-sm font-semibold text-slate-500">Aucun reglement enregistre.</p>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="mt-5 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
     <h2 class="text-lg font-black text-slate-950">Lignes facturées</h2>
     <ul class="mt-4 divide-y divide-slate-200">
         {% for ligne in facture.devis.lignes %}

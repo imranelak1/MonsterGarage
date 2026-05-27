@@ -1,15 +1,21 @@
-from flask import Blueprint, Response, flash, redirect, render_template, request, url_for
+from datetime import date
+
+from flask import Blueprint, Response, flash, redirect, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
 
 from app.extensions import db
-from app.models import Client, DevisReparation, DossierReparation, Vehicule
+from app.models import Client, DevisReparation, DocumentDossier, DossierReparation, PieceDossier, Utilisateur, Vehicule
+from app.services.documents import CATEGORIES_DOCUMENTS, chemin_document, enregistrer_document
 from app.services.dossiers import (
     RegleMetierErreur,
+    ajouter_piece,
     annuler_dossier_facturable,
     annuler_dossier,
     approuver_devis,
+    changer_statut_piece,
     creer_devis,
     normaliser_numero_bon_sntl,
+    normaliser_priorite,
     generer_numero_dossier,
     journaliser,
     mettre_en_pause,
@@ -29,6 +35,8 @@ SNTL_CLIENTS_PREDEFINIS = {
     "300-84": {"code": "300", "nom": "NARSA", "or_numero": "84"},
     "800-89": {"code": "800", "nom": "AMEE", "or_numero": "89"},
 }
+
+STATUTS_PIECES = ["a_commander", "commandee", "recue", "annulee"]
 
 
 @bp.route("/")
@@ -91,12 +99,23 @@ def liste_devis():
 def nouveau():
     clients = Client.query.order_by(Client.nom.asc()).all()
     vehicules = Vehicule.query.order_by(Vehicule.immatriculation.asc()).all()
+    utilisateurs = Utilisateur.query.filter_by(actif=True).order_by(Utilisateur.nom_complet.asc()).all()
+
+    def afficher_formulaire():
+        return render_template(
+            "dossiers/formulaire.html",
+            clients=clients,
+            vehicules=vehicules,
+            utilisateurs=utilisateurs,
+            sntl_presets=SNTL_CLIENTS_PREDEFINIS,
+            form_data=request.form,
+        )
 
     if request.method == "POST":
         demande_client = request.form.get("demande_client", "").strip()
         if not demande_client:
             flash("La demande client est obligatoire.", "danger")
-            return render_template("dossiers/formulaire.html", clients=clients, vehicules=vehicules, sntl_presets=SNTL_CLIENTS_PREDEFINIS)
+            return afficher_formulaire()
 
         try:
             client = _obtenir_ou_creer_client()
@@ -106,7 +125,7 @@ def nouveau():
         except RegleMetierErreur as erreur:
             db.session.rollback()
             flash(str(erreur), "danger")
-            return render_template("dossiers/formulaire.html", clients=clients, vehicules=vehicules, sntl_presets=SNTL_CLIENTS_PREDEFINIS)
+            return afficher_formulaire()
 
         try:
             numero_bon_sntl = (
@@ -117,13 +136,16 @@ def nouveau():
         except RegleMetierErreur as erreur:
             db.session.rollback()
             flash(str(erreur), "danger")
-            return render_template("dossiers/formulaire.html", clients=clients, vehicules=vehicules, sntl_presets=SNTL_CLIENTS_PREDEFINIS)
+            return afficher_formulaire()
 
         dossier = DossierReparation(
             numero=generer_numero_dossier(),
             client_id=client.id,
             vehicule_id=vehicule.id,
             created_by_id=current_user.id,
+            responsable_id=_responsable_id_ou_defaut(request.form.get("responsable_id")),
+            priorite=normaliser_priorite(request.form.get("priorite")),
+            date_promesse=_date_ou_none(request.form.get("date_promesse")),
             demande_client=demande_client,
             diagnostic_initial=request.form.get("diagnostic_initial", "").strip(),
             assurance_nom=request.form.get("assurance_nom", "").strip() if client.type == "particulier" else "",
@@ -139,7 +161,14 @@ def nouveau():
         flash("Dossier atelier créé. Prochaine étape : devis initial.", "success")
         return redirect(url_for("dossiers.detail", dossier_id=dossier.id))
 
-    return render_template("dossiers/formulaire.html", clients=clients, vehicules=vehicules, sntl_presets=SNTL_CLIENTS_PREDEFINIS)
+    return render_template(
+        "dossiers/formulaire.html",
+        clients=clients,
+        vehicules=vehicules,
+        utilisateurs=utilisateurs,
+        sntl_presets=SNTL_CLIENTS_PREDEFINIS,
+        form_data={},
+    )
 
 
 @bp.route("/<int:dossier_id>")
@@ -148,7 +177,12 @@ def detail(dossier_id):
     dossier = _obtenir_dossier(dossier_id)
     if not dossier:
         return redirect(url_for("dossiers.liste"))
-    return render_template("dossiers/detail.html", dossier=dossier)
+    return render_template(
+        "dossiers/detail.html",
+        dossier=dossier,
+        categories_documents=sorted(CATEGORIES_DOCUMENTS),
+        statuts_pieces=STATUTS_PIECES,
+    )
 
 
 @bp.route("/<int:dossier_id>/devis/nouveau", methods=["GET", "POST"])
@@ -360,6 +394,96 @@ def ajouter_note(dossier_id):
     return redirect(url_for("dossiers.detail", dossier_id=dossier.id))
 
 
+@bp.route("/<int:dossier_id>/documents", methods=["POST"])
+@login_required
+def ajouter_document(dossier_id):
+    dossier = _obtenir_dossier(dossier_id)
+    if not dossier:
+        return redirect(url_for("dossiers.liste"))
+
+    try:
+        enregistrer_document(
+            dossier,
+            request.files.get("document"),
+            categorie=request.form.get("categorie", "autre"),
+            description=request.form.get("description", ""),
+        )
+        db.session.commit()
+        flash("Document ajoute au dossier.", "success")
+    except RegleMetierErreur as erreur:
+        db.session.rollback()
+        flash(str(erreur), "danger")
+
+    return redirect(url_for("dossiers.detail", dossier_id=dossier.id))
+
+
+@bp.route("/documents/<int:document_id>/telecharger")
+@login_required
+def telecharger_document(document_id):
+    document = db.session.get(DocumentDossier, document_id)
+    if not document:
+        flash("Document introuvable.", "warning")
+        return redirect(url_for("dossiers.liste"))
+
+    try:
+        chemin = chemin_document(document)
+    except RegleMetierErreur as erreur:
+        flash(str(erreur), "danger")
+        return redirect(url_for("dossiers.detail", dossier_id=document.dossier_id))
+
+    return send_file(
+        chemin,
+        mimetype=document.mime_type,
+        as_attachment=True,
+        download_name=document.nom_original,
+    )
+
+
+@bp.route("/<int:dossier_id>/pieces", methods=["POST"])
+@login_required
+def ajouter_piece_dossier(dossier_id):
+    dossier = _obtenir_dossier(dossier_id)
+    if not dossier:
+        return redirect(url_for("dossiers.liste"))
+
+    try:
+        ajouter_piece(
+            dossier,
+            designation=request.form.get("designation", ""),
+            quantite=request.form.get("quantite", "1"),
+            fournisseur=request.form.get("fournisseur", ""),
+            prix_achat_ht=request.form.get("prix_achat_ht", ""),
+            date_prevue=_date_ou_none(request.form.get("date_prevue")),
+            notes=request.form.get("notes", ""),
+        )
+        db.session.commit()
+        flash("Piece ajoutee au suivi.", "success")
+    except RegleMetierErreur as erreur:
+        db.session.rollback()
+        flash(str(erreur), "danger")
+
+    return redirect(url_for("dossiers.detail", dossier_id=dossier.id))
+
+
+@bp.route("/pieces/<int:piece_id>/statut", methods=["POST"])
+@login_required
+def changer_piece(piece_id):
+    piece = db.session.get(PieceDossier, piece_id)
+    if not piece:
+        flash("Piece introuvable.", "warning")
+        return redirect(url_for("dossiers.liste"))
+
+    try:
+        changer_statut_piece(piece, request.form.get("statut", ""))
+        db.session.commit()
+        flash("Statut de piece mis a jour.", "success")
+    except RegleMetierErreur as erreur:
+        db.session.rollback()
+        flash(str(erreur), "danger")
+
+    return redirect(url_for("dossiers.detail", dossier_id=piece.dossier_id))
+
+
 def _obtenir_dossier(dossier_id: int):
     dossier = db.session.get(DossierReparation, dossier_id)
     if not dossier:
@@ -498,6 +622,12 @@ def _obtenir_ou_creer_vehicule(client: Client) -> Vehicule:
     if not (immatriculation and marque and modele):
         raise RegleMetierErreur("Immatriculation, marque et modèle sont obligatoires pour ouvrir le dossier.")
 
+    vehicule_existant = Vehicule.query.filter_by(immatriculation=immatriculation).first()
+    if vehicule_existant:
+        if vehicule_existant.client_id == client.id:
+            return vehicule_existant
+        raise RegleMetierErreur("Cette immatriculation existe deja sur un autre client.")
+
     type_immatriculation = "administrative" if client.type == "sntl" else (request.form.get("vehicule_type_immatriculation") or "standard")
 
     vehicule = Vehicule(
@@ -533,3 +663,23 @@ def _int_ou_none(valeur: str | None) -> int | None:
         return int(valeur)
     except ValueError:
         return None
+
+
+def _date_ou_none(valeur: str | None):
+    if not valeur:
+        return None
+    try:
+        return date.fromisoformat(valeur)
+    except ValueError:
+        return None
+
+
+def _responsable_id_ou_defaut(valeur: str | None) -> int:
+    if valeur:
+        try:
+            utilisateur = db.session.get(Utilisateur, int(valeur))
+        except ValueError:
+            utilisateur = None
+        if utilisateur and utilisateur.actif:
+            return utilisateur.id
+    return current_user.id

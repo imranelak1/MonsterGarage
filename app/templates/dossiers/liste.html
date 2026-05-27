@@ -29,18 +29,20 @@
 </section>
 
 <section class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-    <div class="grid grid-cols-[130px_1fr_1fr_180px] gap-4 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-wide text-slate-500">
+    <div class="grid grid-cols-[120px_1fr_1fr_140px_180px] gap-4 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-wide text-slate-500">
         <span>Dossier</span>
         <span>Client</span>
         <span>Véhicule</span>
+        <span>Priorite</span>
         <span>Statut</span>
     </div>
     <div class="divide-y divide-slate-200">
         {% for dossier in dossiers %}
-            <a class="grid grid-cols-[130px_1fr_1fr_180px] gap-4 px-4 py-4 text-sm transition hover:bg-yellow-50" href="{{ url_for('dossiers.detail', dossier_id=dossier.id) }}">
+            <a class="grid grid-cols-[120px_1fr_1fr_140px_180px] gap-4 px-4 py-4 text-sm transition hover:bg-yellow-50" href="{{ url_for('dossiers.detail', dossier_id=dossier.id) }}">
                 <span class="font-black text-slate-950">{{ dossier.numero }}</span>
                 <span class="font-semibold text-slate-700">{{ dossier.client.nom }}</span>
                 <span class="text-slate-600">{{ dossier.vehicule.libelle }}</span>
+                <span class="font-bold {% if dossier.date_promesse_depassee %}text-red-700{% else %}text-slate-700{% endif %}">{{ dossier.priorite_libelle }}{% if dossier.date_promesse %} - {{ dossier.date_promesse.strftime("%d/%m") }}{% endif %}</span>
                 <span class="font-bold text-slate-700">{{ dossier.statut_libelle }}</span>
             </a>
         {% else %}

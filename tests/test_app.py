@@ -6,15 +6,16 @@ import pytest
 
 from app import create_app
 from app.extensions import db
-from app.models import AvanceSalaire, Client, DevisReparation, DossierReparation, Employe, Entreprise, FactureReparation, ParametreSysteme, Salaire, Utilisateur, Vehicule
+from app.models import AvanceSalaire, Client, DevisReparation, DocumentDossier, DossierReparation, Employe, Entreprise, FactureReparation, ParametreSysteme, PieceDossier, ReglementFacture, Salaire, Utilisateur, Vehicule
 from app.services.export_salaires import exporter_salaires_excel
 from app.services.import_excel import importer_salaires_excel
 from app.services.parametres import assurer_parametres_defaut, obtenir_entreprise
 
 
 @pytest.fixture()
-def app():
+def app(tmp_path):
     app = create_app("testing")
+    app.instance_path = str(tmp_path)
 
     with app.app_context():
         db.create_all()
@@ -420,6 +421,35 @@ def test_creation_dossier_atelier(client, app):
         assert dossier.numero.startswith("DA-")
 
 
+def test_creation_dossier_enregistre_pilotage(client, app):
+    connecter(client)
+    client_id, vehicule_id = creer_client_vehicule(app)
+
+    response = client.post(
+        "/dossiers/nouveau",
+        data={
+            "mode_client": "existant",
+            "mode_vehicule": "existant",
+            "client_id": str(client_id),
+            "vehicule_id": str(vehicule_id),
+            "responsable_id": "1",
+            "priorite": "urgente",
+            "date_promesse": "2026-06-15",
+            "demande_client": "Client presse",
+            "diagnostic_initial": "",
+            "kilometrage_entree": "",
+            "notes": "",
+        },
+    )
+
+    assert response.status_code == 302
+    with app.app_context():
+        dossier = DossierReparation.query.first()
+        assert dossier.responsable_id == 1
+        assert dossier.priorite == "urgente"
+        assert dossier.date_promesse == date(2026, 6, 15)
+
+
 def test_journal_actions_affiche_date(client, app):
     connecter(client)
     client_id, vehicule_id = creer_client_vehicule(app)
@@ -477,6 +507,58 @@ def test_detail_dossier_priorise_poste_de_commande(client, app):
     journal = response.data.index("Journal d'actions".encode())
     assert poste < devis < journal
     assert "Prochaine action".encode() in response.data
+
+
+def test_dossier_joint_document_et_suit_piece(client, app):
+    connecter(client)
+    client_id, vehicule_id = creer_client_vehicule(app)
+    client.post(
+        "/dossiers/nouveau",
+        data={
+            "mode_client": "existant",
+            "mode_vehicule": "existant",
+            "client_id": str(client_id),
+            "vehicule_id": str(vehicule_id),
+            "demande_client": "Pieces et preuves",
+            "diagnostic_initial": "",
+            "kilometrage_entree": "",
+            "notes": "",
+        },
+    )
+    with app.app_context():
+        dossier_id = DossierReparation.query.first().id
+
+    response = client.post(
+        f"/dossiers/{dossier_id}/pieces",
+        data={"designation": "Filtre huile", "quantite": "1", "fournisseur": "Local", "prix_achat_ht": "45"},
+    )
+    assert response.status_code == 302
+    with app.app_context():
+        piece = PieceDossier.query.first()
+        assert piece.designation == "Filtre huile"
+        piece_id = piece.id
+
+    response = client.post(f"/dossiers/pieces/{piece_id}/statut", data={"statut": "commandee"})
+    assert response.status_code == 302
+    with app.app_context():
+        piece = db.session.get(PieceDossier, piece_id)
+        assert piece.statut == "commandee"
+
+    response = client.post(
+        f"/dossiers/{dossier_id}/documents",
+        data={
+            "categorie": "devis_signe",
+            "description": "Accord client",
+            "document": (BytesIO(b"%PDF-1.4\n%test\n"), "accord.pdf"),
+        },
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 302
+    with app.app_context():
+        document = DocumentDossier.query.first()
+        assert document.categorie == "devis_signe"
+        assert document.nom_original == "accord.pdf"
+        assert any(action.action == "document_ajoute" for action in DossierReparation.query.first().journal)
 
 
 def test_formulaire_dossier_prepare_filtrage_vehicules_par_client(client, app):
@@ -1275,6 +1357,9 @@ def test_facture_livraison_puis_reglement(client, app):
         assert facture.mode_reglement == "virement"
         assert facture.reference_reglement == "VIR-001"
         assert str(facture.montant_regle) == "240.00"
+        reglement = ReglementFacture.query.filter_by(facture_id=facture_id).first()
+        assert reglement is not None
+        assert str(reglement.montant) == "240.00"
 
 
 def test_facture_accepte_paiements_partiels_sans_depassement(client, app):
@@ -1329,6 +1414,7 @@ def test_facture_accepte_paiements_partiels_sans_depassement(client, app):
         assert facture.statut == "reglee"
         assert str(facture.montant_regle) == "240.00"
         assert str(facture.montant_restant) == "0.00"
+        assert ReglementFacture.query.filter_by(facture_id=facture_id).count() == 2
 
 
 def test_liste_factures_affiche_facture(client, app):
