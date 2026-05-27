@@ -28,9 +28,9 @@ from app.models.parametre import ParametreSysteme
 from app.models.utilisateur import Utilisateur
 from app.models.client import Client
 from app.models.vehicule import Vehicule
-from app.models.dossier_reparation import DossierReparation, JournalAction
+from app.models.dossier_reparation import DocumentDossier, DossierReparation, JournalAction, PieceDossier
 from app.models.devis_reparation import DevisReparation, LigneDevisReparation
-from app.models.facture_reparation import FactureReparation
+from app.models.facture_reparation import FactureReparation, ReglementFacture
 from app.models.employe import Employe
 from app.models.avance_salaire import AvanceSalaire
 from app.models.salaire import Salaire
@@ -39,6 +39,7 @@ __all__ = [
     "AvanceSalaire",
     "Client",
     "DevisReparation",
+    "DocumentDossier",
     "DossierReparation",
     "Employe",
     "Entreprise",
@@ -46,6 +47,8 @@ __all__ = [
     "JournalAction",
     "LigneDevisReparation",
     "ParametreSysteme",
+    "PieceDossier",
+    "ReglementFacture",
     "Salaire",
     "Utilisateur",
     "Vehicule",

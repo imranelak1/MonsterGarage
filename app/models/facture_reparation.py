@@ -36,6 +36,12 @@ class FactureReparation(db.Model):
     dossier = db.relationship("DossierReparation", back_populates="facture")
     devis = db.relationship("DevisReparation")
     created_by = db.relationship("Utilisateur")
+    reglements = db.relationship(
+        "ReglementFacture",
+        back_populates="facture",
+        cascade="all, delete-orphan",
+        order_by="ReglementFacture.created_at",
+    )
 
     @property
     def statut_libelle(self) -> str:
@@ -65,3 +71,30 @@ class FactureReparation(db.Model):
     def montant_restant(self):
         restant = self.montant_ttc - (self.montant_regle or 0)
         return max(restant, 0)
+
+
+class ReglementFacture(db.Model):
+    __tablename__ = "reglements_facture"
+
+    id = db.Column(db.Integer, primary_key=True)
+    facture_id = db.Column(db.Integer, db.ForeignKey("factures_reparation.id"), nullable=False, index=True)
+    created_by_id = db.Column(db.Integer, db.ForeignKey("utilisateurs.id"), nullable=False)
+    montant = db.Column(db.Numeric(12, 2), nullable=False)
+    mode_reglement = db.Column(db.Enum("especes", "cheque", "virement", "carte", "autre", name="mode_reglement_facture"))
+    reference = db.Column(db.String(100))
+    notes = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    facture = db.relationship("FactureReparation", back_populates="reglements")
+    created_by = db.relationship("Utilisateur")
+
+    @property
+    def mode_reglement_libelle(self) -> str:
+        modes = {
+            "especes": "EspÃ¨ces",
+            "cheque": "ChÃ¨que",
+            "virement": "Virement",
+            "carte": "Carte bancaire",
+            "autre": "Autre",
+        }
+        return modes.get(self.mode_reglement, self.mode_reglement or "-")

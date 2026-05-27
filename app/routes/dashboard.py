@@ -1,3 +1,5 @@
+from datetime import date
+
 from flask import Blueprint, redirect, render_template, url_for
 from flask_login import login_required
 
@@ -14,14 +16,14 @@ GROUPES_FLUX = [
         "couleur": "slate",
     },
     {
-        "titre": "En mécanique",
-        "sous_titre": "Réparation active ou en pause",
+        "titre": "En mecanique",
+        "sous_titre": "Reparation active ou en pause",
         "statuts": ["in_progress", "paused_pending_approval"],
         "couleur": "yellow",
     },
     {
         "titre": "Finition & livraison",
-        "sous_titre": "Terminé ou prêt à facturer",
+        "sous_titre": "Termine ou pret a facturer",
         "statuts": ["completed", "cancelled_billable"],
         "couleur": "green",
     },
@@ -47,6 +49,13 @@ BADGES_STATUT = {
     "cancelled": "bg-red-50 text-red-700",
 }
 
+PRIORITE_RANG = {
+    "urgente": 4,
+    "haute": 3,
+    "normale": 2,
+    "basse": 1,
+}
+
 
 @bp.route("/")
 def index():
@@ -56,29 +65,36 @@ def index():
 @bp.route("/tableau-de-bord")
 @login_required
 def accueil():
+    statuts_ouverts = ["pending_devis", "pending_approval", "in_progress", "paused_pending_approval"]
     total_dossiers = DossierReparation.query.count()
     attente_accord = DossierReparation.query.filter_by(statut="pending_approval").count()
     en_reparation = DossierReparation.query.filter(
         DossierReparation.statut.in_(["in_progress", "paused_pending_approval"])
     ).count()
     factures_a_suivre = FactureReparation.query.filter(FactureReparation.statut.in_(["emise", "livree"])).count()
+    dossiers_en_retard = DossierReparation.query.filter(
+        DossierReparation.date_promesse < date.today(),
+        DossierReparation.statut.in_(statuts_ouverts),
+    ).count()
 
     indicateurs = [
         {"libelle": "Dossiers atelier", "valeur": total_dossiers, "detail": "Flux complet"},
         {"libelle": "Devis en attente", "valeur": attente_accord, "detail": "Accord client"},
-        {"libelle": "En réparation", "valeur": en_reparation, "detail": "Actif ou pause"},
-        {"libelle": "Livraison / règlement", "valeur": factures_a_suivre, "detail": "Factures à suivre"},
+        {"libelle": "En reparation", "valeur": en_reparation, "detail": "Actif ou pause"},
+        {"libelle": "Retards", "valeur": dossiers_en_retard, "detail": "Date promise depassee"},
+        {"libelle": "Livraison / reglement", "valeur": factures_a_suivre, "detail": "Factures a suivre"},
     ]
 
     colonnes = []
     for groupe in GROUPES_FLUX:
         dossiers = (
             DossierReparation.query.filter(DossierReparation.statut.in_(groupe["statuts"]))
-            .order_by(DossierReparation.updated_at.desc())
-            .limit(5)
+            .order_by(DossierReparation.date_promesse.is_(None), DossierReparation.date_promesse.asc(), DossierReparation.updated_at.desc())
+            .limit(12)
             .all()
         )
-        colonnes.append({**groupe, "dossiers": dossiers})
+        dossiers.sort(key=lambda dossier: PRIORITE_RANG.get(dossier.priorite, 2), reverse=True)
+        colonnes.append({**groupe, "dossiers": dossiers[:5]})
 
     dernier_dossier = DossierReparation.query.order_by(DossierReparation.created_at.desc()).first()
 

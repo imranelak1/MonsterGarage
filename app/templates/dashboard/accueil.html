@@ -74,7 +74,7 @@
         </div>
     </section>
 
-    <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {% for indicateur in indicateurs %}
             <article class="mg-card p-4">
                 <p class="text-sm font-bold text-slate-500">{{ indicateur.libelle }}</p>
@@ -115,6 +115,12 @@
                             <div class="mb-4 flex items-start justify-between gap-4">
                                 <span class="mg-status-tag {{ badges.get(dossier.statut, 'bg-slate-100 text-slate-700') }}">{{ dossier.statut_libelle }}</span>
                                 <span class="font-mono text-xs font-black text-slate-300">#{{ dossier.numero }}</span>
+                            </div>
+                            <div class="mb-3 flex flex-wrap gap-2">
+                                <span class="rounded-md bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-slate-600">{{ dossier.priorite_libelle }}</span>
+                                {% if dossier.date_promesse %}
+                                <span class="rounded-md px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] {% if dossier.date_promesse_depassee %}bg-red-50 text-red-700{% else %}bg-emerald-50 text-emerald-700{% endif %}">{{ dossier.date_promesse.strftime("%d/%m") }}</span>
+                                {% endif %}
                             </div>
 
                             <h4 class="text-lg font-black tracking-tight text-black">{{ dossier.vehicule.marque }} {{ dossier.vehicule.modele }}</h4>

@@ -118,6 +118,14 @@
             <dl class="mt-3 grid gap-2 text-sm">
                 <div class="flex justify-between gap-4"><dt class="text-slate-500">Dernier devis</dt><dd class="font-black text-slate-900">{{ dossier.dernier_devis.statut_libelle if dossier.dernier_devis else "Aucun" }}</dd></div>
                 <div class="flex justify-between gap-4"><dt class="text-slate-500">Facture</dt><dd class="font-black text-slate-900">{{ dossier.facture.numero if dossier.facture else "Non générée" }}</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-slate-500">Responsable</dt><dd class="text-right font-black text-slate-900">{{ dossier.responsable.nom_complet if dossier.responsable else dossier.created_by.nom_complet }}</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-slate-500">Priorite</dt><dd class="font-black text-slate-900">{{ dossier.priorite_libelle }}</dd></div>
+                {% if dossier.date_promesse %}
+                <div class="flex justify-between gap-4"><dt class="text-slate-500">Date promise</dt><dd class="font-black {% if dossier.date_promesse_depassee %}text-red-700{% else %}text-slate-900{% endif %}">{{ dossier.date_promesse.strftime("%d/%m/%Y") }}</dd></div>
+                {% endif %}
+                {% if dossier.motif_blocage %}
+                <div class="rounded-md bg-orange-50 p-3 text-xs font-bold leading-5 text-orange-900">{{ dossier.motif_blocage }}</div>
+                {% endif %}
                 {% if dossier.numero_bon_sntl %}
                 <div class="flex justify-between gap-4"><dt class="text-slate-500">Bon SNTL</dt><dd class="font-black text-slate-900">{{ dossier.numero_bon_sntl }}</dd></div>
                 {% endif %}
@@ -181,7 +189,7 @@
                     </div>
                     <div class="self-center">
                         {% if dossier.statut == 'pending_devis' and dossier.dernier_devis and dossier.dernier_devis.statut == 'rejected' %}
-                        <a class="inline-flex h-9 w-full items-center justify-center rounded-md bg-monster-jaune px-3 text-xs font-black text-black" href="{{ url_for('dossiers.nouveau_devis', dossier_id=dossier.id) }}">Créer version corrigée</a>
+                        <a class="inline-flex h-9 w-full items-center justify-center rounded-md bg-monster-jaune px-3 text-xs font-black text-black" href="{{ url_for('dossiers.nouveau_devis', dossier_id=dossier.id) }}">Créer une version corrigée</a>
                         {% elif dossier.statut in ['pending_devis', 'paused_pending_approval'] %}
                         <a class="inline-flex h-9 w-full items-center justify-center rounded-md bg-monster-jaune px-3 text-xs font-black text-black" href="{{ url_for('dossiers.nouveau_devis', dossier_id=dossier.id) }}">Créer un devis</a>
                         {% else %}
@@ -375,6 +383,80 @@
                 <button class="h-10 rounded-md border border-amber-300 bg-amber-50 px-4 text-sm font-black text-amber-800" type="submit">Reprendre en garantie</button>
             </form>
             {% endif %}
+        </section>
+
+        <section class="grid gap-5 xl:grid-cols-[1fr_0.9fr]">
+            <article class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h2 class="text-lg font-black text-slate-950">Pieces & approvisionnement</h2>
+                        <p class="mt-1 text-xs font-semibold text-slate-500">Suivi rapide des pieces liees a ce dossier.</p>
+                    </div>
+                    <span class="rounded-md bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">{{ dossier.pieces|length }} piece(s)</span>
+                </div>
+
+                <form class="mt-4 grid gap-3 md:grid-cols-[1fr_90px_130px_130px_140px]" method="post" action="{{ url_for('dossiers.ajouter_piece_dossier', dossier_id=dossier.id) }}">
+                    <input class="h-10 rounded-md border border-slate-300 px-3 text-sm" name="designation" placeholder="Designation piece" required>
+                    <input class="h-10 rounded-md border border-slate-300 px-3 text-sm" name="quantite" type="number" step="0.01" min="0.01" value="1">
+                    <input class="h-10 rounded-md border border-slate-300 px-3 text-sm" name="fournisseur" placeholder="Fournisseur">
+                    <input class="h-10 rounded-md border border-slate-300 px-3 text-sm" name="prix_achat_ht" type="number" step="0.01" min="0" placeholder="Prix HT">
+                    <button class="h-10 rounded-md bg-monster-jaune px-3 text-xs font-black text-black" type="submit">Ajouter</button>
+                </form>
+
+                <div class="mt-4 divide-y divide-slate-200">
+                    {% for piece in dossier.pieces|sort(attribute='created_at', reverse=True) %}
+                    <article class="grid gap-3 py-3 text-sm lg:grid-cols-[1fr_150px]">
+                        <div>
+                            <p class="font-black text-slate-950">{{ piece.designation }} x {{ piece.quantite }}</p>
+                            <p class="text-xs font-semibold text-slate-500">
+                                {{ piece.fournisseur or "Fournisseur non precise" }}
+                                {% if piece.prix_achat_ht %} - {{ "%.2f"|format(piece.prix_achat_ht) }} MAD HT{% endif %}
+                            </p>
+                        </div>
+                        <form class="flex gap-2" method="post" action="{{ url_for('dossiers.changer_piece', piece_id=piece.id) }}">
+                            <select class="h-9 min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-2 text-xs" name="statut">
+                                {% for statut_piece in statuts_pieces %}
+                                <option value="{{ statut_piece }}" {% if piece.statut == statut_piece %}selected{% endif %}>{{ statut_piece }}</option>
+                                {% endfor %}
+                            </select>
+                            <button class="h-9 rounded-md border border-slate-300 bg-white px-2 text-xs font-black text-slate-700" type="submit">OK</button>
+                        </form>
+                    </article>
+                    {% else %}
+                    <p class="py-6 text-center text-sm font-semibold text-slate-500">Aucune piece suivie pour ce dossier.</p>
+                    {% endfor %}
+                </div>
+            </article>
+
+            <article class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                <h2 class="text-lg font-black text-slate-950">Documents & preuves</h2>
+                <form class="mt-4 grid gap-3" method="post" action="{{ url_for('dossiers.ajouter_document', dossier_id=dossier.id) }}" enctype="multipart/form-data">
+                    <div class="grid gap-3 sm:grid-cols-[1fr_170px]">
+                        <input class="h-10 rounded-md border border-slate-300 px-3 text-sm" type="file" name="document" accept=".pdf,.png,.jpg,.jpeg,.webp,.xlsx,.docx" required>
+                        <select class="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm" name="categorie">
+                            {% for categorie in categories_documents %}
+                            <option value="{{ categorie }}">{{ categorie }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <input class="h-10 rounded-md border border-slate-300 px-3 text-sm" name="description" placeholder="Description courte">
+                    <button class="h-10 rounded-md bg-slate-950 px-3 text-xs font-black text-white" type="submit">Joindre au dossier</button>
+                </form>
+
+                <div class="mt-4 divide-y divide-slate-200">
+                    {% for document in dossier.documents|sort(attribute='created_at', reverse=True) %}
+                    <article class="flex items-start justify-between gap-3 py-3 text-sm">
+                        <div class="min-w-0">
+                            <p class="truncate font-black text-slate-950">{{ document.nom_original }}</p>
+                            <p class="text-xs font-semibold text-slate-500">{{ document.categorie_libelle }} - {{ (document.taille_octets / 1024)|round(1) }} Ko</p>
+                        </div>
+                        <a class="shrink-0 rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-700" href="{{ url_for('dossiers.telecharger_document', document_id=document.id) }}">Telecharger</a>
+                    </article>
+                    {% else %}
+                    <p class="py-6 text-center text-sm font-semibold text-slate-500">Aucun document joint.</p>
+                    {% endfor %}
+                </div>
+            </article>
         </section>
 
         <section class="grid gap-5 xl:grid-cols-[1fr_0.9fr]">

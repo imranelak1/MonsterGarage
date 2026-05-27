@@ -1,7 +1,8 @@
-from flask import Flask
+from flask import Flask, flash, redirect, request, url_for
+from flask_wtf.csrf import CSRFError
 
 from app.config import config_by_name
-from app.extensions import db, login_manager, migrate
+from app.extensions import csrf, db, login_manager, migrate
 from app.models import register_sqlite_pragmas
 from app.security import register_session_timeout
 
@@ -13,6 +14,7 @@ def create_app(config_name: str = "development") -> Flask:
     db.init_app(app)
     migrate.init_app(app, db)
     login_manager.init_app(app)
+    csrf.init_app(app)
     login_manager.login_view = "auth.connexion"
     login_manager.login_message = "Veuillez vous connecter pour accéder à cette page."
     login_manager.login_message_category = "warning"
@@ -20,6 +22,7 @@ def create_app(config_name: str = "development") -> Flask:
     register_sqlite_pragmas()
     register_blueprints(app)
     register_session_timeout(app)
+    register_error_handlers(app)
 
     return app
 
@@ -42,3 +45,10 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(parametres_bp)
     app.register_blueprint(rh_bp)
     app.register_blueprint(vehicules_bp)
+
+
+def register_error_handlers(app: Flask) -> None:
+    @app.errorhandler(CSRFError)
+    def handle_csrf_error(error):
+        flash("Formulaire expire ou invalide. Reessayez l'action.", "danger")
+        return redirect(request.referrer or url_for("dashboard.accueil")), 400
