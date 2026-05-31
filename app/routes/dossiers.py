@@ -1,5 +1,6 @@
 from flask import Blueprint, Response, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
+from sqlalchemy.orm import joinedload
 
 from app.extensions import db
 from app.models import Client, DevisReparation, DossierReparation, Vehicule
@@ -9,7 +10,6 @@ from app.services.dossiers import (
     annuler_dossier,
     approuver_devis,
     creer_devis,
-    normaliser_numero_bon_sntl,
     generer_numero_dossier,
     journaliser,
     mettre_en_pause,
@@ -17,28 +17,26 @@ from app.services.dossiers import (
     rouvrir_garantie,
     terminer_dossier,
 )
+from app.services.dossiers_sntl import est_dossier_sntl
+from app.services.date_filters import appliquer_filtre_periode, periode_depuis_requete
 from app.services.export_documents import XLSX_MIMETYPE, exporter_devis_excel, nom_fichier_devis
 from app.services.export_pdf import PDF_MIMETYPE, exporter_devis_pdf, nom_fichier_devis_pdf
+from app.services.pagination import paginer
 from app.services.telephone import normaliser_telephone
 
 bp = Blueprint("dossiers", __name__, url_prefix="/dossiers")
-
-SNTL_CLIENTS_PREDEFINIS = {
-    "600-85": {"code": "600", "nom": "Commune Harbil", "or_numero": "85"},
-    "100-83": {"code": "100", "nom": "Wilaya", "or_numero": "83"},
-    "300-84": {"code": "300", "nom": "NARSA", "or_numero": "84"},
-    "800-89": {"code": "800", "nom": "AMEE", "or_numero": "89"},
-}
-
 
 @bp.route("/")
 @login_required
 def liste():
     statut = request.args.get("statut", "").strip()
     recherche = request.args.get("q", "").strip()
+    periode = periode_depuis_requete()
     requete = DossierReparation.query.join(DossierReparation.client).join(DossierReparation.vehicule)
+    requete = requete.filter(Client.type != "sntl")
     if statut:
         requete = requete.filter(DossierReparation.statut == statut)
+    requete = appliquer_filtre_periode(requete, DossierReparation.created_at, periode)
     if recherche:
         motif = f"%{recherche}%"
         requete = requete.filter(
@@ -52,8 +50,12 @@ def liste():
                 Vehicule.modele.ilike(motif),
             )
         )
-    dossiers = requete.order_by(DossierReparation.created_at.desc()).limit(100).all()
-    return render_template("dossiers/liste.html", dossiers=dossiers, statut=statut, recherche=recherche)
+    requete = requete.options(
+        joinedload(DossierReparation.client),
+        joinedload(DossierReparation.vehicule),
+    )
+    pagination = paginer(requete.order_by(DossierReparation.created_at.desc()))
+    return render_template("dossiers/liste.html", dossiers=pagination.items, pagination=pagination, statut=statut, recherche=recherche, periode=periode)
 
 
 @bp.route("/devis")
@@ -61,6 +63,7 @@ def liste():
 def liste_devis():
     statut = request.args.get("statut", "").strip()
     recherche = request.args.get("q", "").strip()
+    periode = periode_depuis_requete()
     requete = (
         DevisReparation.query
         .join(DevisReparation.dossier)
@@ -69,6 +72,7 @@ def liste_devis():
     )
     if statut:
         requete = requete.filter(DevisReparation.statut == statut)
+    requete = appliquer_filtre_periode(requete, DevisReparation.created_at, periode)
     if recherche:
         motif = f"%{recherche}%"
         requete = requete.filter(
@@ -82,21 +86,25 @@ def liste_devis():
                 Vehicule.modele.ilike(motif),
             )
         )
-    devis = requete.order_by(DevisReparation.created_at.desc()).limit(100).all()
-    return render_template("dossiers/devis_liste.html", devis=devis, statut=statut, recherche=recherche)
+    requete = requete.options(
+        joinedload(DevisReparation.dossier).joinedload(DossierReparation.client),
+        joinedload(DevisReparation.dossier).joinedload(DossierReparation.vehicule),
+    )
+    pagination = paginer(requete.order_by(DevisReparation.created_at.desc()))
+    return render_template("dossiers/devis_liste.html", devis=pagination.items, pagination=pagination, statut=statut, recherche=recherche, periode=periode)
 
 
 @bp.route("/nouveau", methods=["GET", "POST"])
 @login_required
 def nouveau():
-    clients = Client.query.order_by(Client.nom.asc()).all()
-    vehicules = Vehicule.query.order_by(Vehicule.immatriculation.asc()).all()
+    clients = Client.query.filter(Client.type != "sntl").order_by(Client.nom.asc()).all()
+    vehicules = Vehicule.query.join(Vehicule.client).filter(Client.type != "sntl").order_by(Vehicule.immatriculation.asc()).all()
 
     if request.method == "POST":
         demande_client = request.form.get("demande_client", "").strip()
         if not demande_client:
             flash("La demande client est obligatoire.", "danger")
-            return render_template("dossiers/formulaire.html", clients=clients, vehicules=vehicules, sntl_presets=SNTL_CLIENTS_PREDEFINIS)
+            return render_template("dossiers/formulaire.html", clients=clients, vehicules=vehicules)
 
         try:
             client = _obtenir_ou_creer_client()
@@ -106,18 +114,7 @@ def nouveau():
         except RegleMetierErreur as erreur:
             db.session.rollback()
             flash(str(erreur), "danger")
-            return render_template("dossiers/formulaire.html", clients=clients, vehicules=vehicules, sntl_presets=SNTL_CLIENTS_PREDEFINIS)
-
-        try:
-            numero_bon_sntl = (
-                normaliser_numero_bon_sntl(request.form.get("numero_bon_sntl"))
-                if client.type == "sntl"
-                else request.form.get("numero_bon_sntl", "").strip()
-            )
-        except RegleMetierErreur as erreur:
-            db.session.rollback()
-            flash(str(erreur), "danger")
-            return render_template("dossiers/formulaire.html", clients=clients, vehicules=vehicules, sntl_presets=SNTL_CLIENTS_PREDEFINIS)
+            return render_template("dossiers/formulaire.html", clients=clients, vehicules=vehicules)
 
         dossier = DossierReparation(
             numero=generer_numero_dossier(),
@@ -127,7 +124,7 @@ def nouveau():
             demande_client=demande_client,
             diagnostic_initial=request.form.get("diagnostic_initial", "").strip(),
             assurance_nom=request.form.get("assurance_nom", "").strip() if client.type == "particulier" else "",
-            numero_bon_sntl=numero_bon_sntl,
+            numero_bon_sntl=request.form.get("numero_bon_sntl", "").strip(),
             kilometrage_entree=_int_ou_none(request.form.get("kilometrage_entree")),
             notes=request.form.get("notes", "").strip(),
         )
@@ -139,15 +136,18 @@ def nouveau():
         flash("Dossier atelier créé. Prochaine étape : devis initial.", "success")
         return redirect(url_for("dossiers.detail", dossier_id=dossier.id))
 
-    return render_template("dossiers/formulaire.html", clients=clients, vehicules=vehicules, sntl_presets=SNTL_CLIENTS_PREDEFINIS)
+    return render_template("dossiers/formulaire.html", clients=clients, vehicules=vehicules)
 
 
 @bp.route("/<int:dossier_id>")
 @login_required
 def detail(dossier_id):
-    dossier = _obtenir_dossier(dossier_id)
+    dossier = db.session.get(DossierReparation, dossier_id)
     if not dossier:
+        flash("Dossier atelier introuvable.", "warning")
         return redirect(url_for("dossiers.liste"))
+    if est_dossier_sntl(dossier):
+        return redirect(url_for("sntl.detail", dossier_id=dossier.id))
     return render_template("dossiers/detail.html", dossier=dossier)
 
 
@@ -364,6 +364,10 @@ def _obtenir_dossier(dossier_id: int):
     dossier = db.session.get(DossierReparation, dossier_id)
     if not dossier:
         flash("Dossier atelier introuvable.", "warning")
+        return None
+    if est_dossier_sntl(dossier):
+        flash("Ce dossier appartient au module SNTL.", "warning")
+        return None
     return dossier
 
 
@@ -390,7 +394,7 @@ def _lignes_devis_depuis_formulaire(dossier: DossierReparation) -> list[dict]:
         etats = request.form.getlist("etat_piece")
         lignes = []
         for index, designation in enumerate(designations):
-            etat_piece = "neuf" if dossier.client.type == "sntl" else (etats[index] if index < len(etats) else "neuf")
+            etat_piece = etats[index] if index < len(etats) else "neuf"
             lignes.append(
                 {
                     "designation": designation,
@@ -421,39 +425,13 @@ def _obtenir_ou_creer_client() -> Client:
         client = db.session.get(Client, int(client_id)) if client_id else None
         if not client:
             raise RegleMetierErreur("Sélectionnez un client existant.")
+        if client.type == "sntl":
+            raise RegleMetierErreur("Utilisez le module SNTL pour creer un dossier SNTL.")
         return client
 
     type_client = request.form.get("client_type", "particulier")
     if type_client == "sntl":
-        preset_key = request.form.get("client_sntl_preset", "").strip()
-        if preset_key and preset_key != "custom":
-            preset = SNTL_CLIENTS_PREDEFINIS.get(preset_key)
-            if not preset:
-                raise RegleMetierErreur("Code SNTL predefini invalide.")
-
-            client_existant = Client.query.filter_by(code=preset["code"]).first()
-            if client_existant:
-                ice = request.form.get("client_ice", "").strip()
-                if ice and not client_existant.ice:
-                    client_existant.ice = ice
-                return client_existant
-
-            client = Client(
-                code=preset["code"],
-                type="sntl",
-                nom=preset["nom"],
-                sigle=preset["nom"].upper(),
-                telephone=_telephone_ou_erreur(request.form.get("client_telephone")),
-                email=request.form.get("client_email", "").strip(),
-                adresse=request.form.get("client_adresse", "").strip(),
-                ville=request.form.get("client_ville", "").strip() or "Marrakech",
-                ice=request.form.get("client_ice", "").strip(),
-                administration_rattachee=preset["nom"],
-                notes=f"OR numero {preset['or_numero']}",
-                delai_paiement_jours=_int_ou_none(request.form.get("client_delai_paiement_jours")) or 30,
-            )
-            db.session.add(client)
-            return client
+        raise RegleMetierErreur("Utilisez le module SNTL pour creer un dossier SNTL.")
 
     nom = request.form.get("client_nom", "").strip()
     if not nom:
@@ -498,14 +476,12 @@ def _obtenir_ou_creer_vehicule(client: Client) -> Vehicule:
     if not (immatriculation and marque and modele):
         raise RegleMetierErreur("Immatriculation, marque et modèle sont obligatoires pour ouvrir le dossier.")
 
-    type_immatriculation = "administrative" if client.type == "sntl" else (request.form.get("vehicule_type_immatriculation") or "standard")
-
     vehicule = Vehicule(
         client_id=client.id,
         immatriculation=immatriculation,
         marque=marque,
         modele=modele,
-        type_immatriculation=type_immatriculation,
+        type_immatriculation=request.form.get("vehicule_type_immatriculation") or "standard",
         type_vehicule=request.form.get("vehicule_type") or "voiture",
         type_carburant=request.form.get("vehicule_carburant") or None,
         kilometrage_actuel=_int_ou_none(request.form.get("kilometrage_entree")),

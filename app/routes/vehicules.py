@@ -1,8 +1,10 @@
 from flask import Blueprint, render_template, request
 from flask_login import login_required
 from sqlalchemy import or_
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.models import Client, DossierReparation, Vehicule
+from app.services.pagination import paginer
 
 bp = Blueprint("vehicules", __name__, url_prefix="/vehicules")
 
@@ -28,7 +30,12 @@ def liste():
     if type_vehicule in {"voiture", "utilitaire", "camion", "moto", "engin", "bateau"}:
         requete = requete.filter(Vehicule.type_vehicule == type_vehicule)
 
-    vehicules = requete.order_by(Vehicule.created_at.desc()).limit(100).all()
+    requete = requete.options(
+        joinedload(Vehicule.client),
+        selectinload(Vehicule.dossiers_reparation),
+    )
+    pagination = paginer(requete.order_by(Vehicule.created_at.desc()))
+    vehicules = pagination.items
     statuts_ouverts = {"pending_devis", "pending_approval", "in_progress", "paused_pending_approval"}
     resumes = []
     for vehicule in vehicules:
@@ -51,6 +58,7 @@ def liste():
     return render_template(
         "vehicules/liste.html",
         vehicules=vehicules,
+        pagination=pagination,
         resumes=resumes,
         stats=stats,
         recherche=recherche,

@@ -1,0 +1,40 @@
+{% if pagination and pagination.pages > 1 %}
+<nav class="mt-6 flex flex-col gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm sm:flex-row sm:items-center sm:justify-between" aria-label="Pagination">
+    <p class="font-semibold text-slate-500">
+        Page <span class="font-black text-slate-900">{{ pagination.page }}</span> sur <span class="font-black text-slate-900">{{ pagination.pages }}</span>
+        <span class="text-slate-300">-</span>
+        {{ pagination.total }} resultats
+    </p>
+    <div class="flex flex-wrap items-center gap-2">
+        {% set prev_params = request.args.to_dict() %}
+        {% set _ = prev_params.update({'page': pagination.prev_num}) %}
+        <a class="inline-flex h-9 items-center justify-center rounded-md border px-3 text-xs font-black uppercase tracking-wide transition {% if pagination.has_prev %}border-slate-200 bg-white text-slate-600 hover:bg-slate-50{% else %}pointer-events-none border-slate-100 bg-slate-50 text-slate-300{% endif %}"
+           href="{{ url_for(request.endpoint, **prev_params) }}"
+           {% if not pagination.has_prev %}aria-disabled="true"{% endif %}>
+            Precedent
+        </a>
+
+        {% for page_number in pagination.iter_pages(left_edge=1, left_current=1, right_current=2, right_edge=1) %}
+            {% if page_number %}
+                {% set params = request.args.to_dict() %}
+                {% set _ = params.update({'page': page_number}) %}
+                <a class="inline-flex h-9 min-w-9 items-center justify-center rounded-md border px-3 text-xs font-black transition {% if page_number == pagination.page %}border-slate-950 bg-slate-950 text-monster-jaune{% else %}border-slate-200 bg-white text-slate-600 hover:bg-slate-50{% endif %}"
+                   href="{{ url_for(request.endpoint, **params) }}"
+                   {% if page_number == pagination.page %}aria-current="page"{% endif %}>
+                    {{ page_number }}
+                </a>
+            {% else %}
+                <span class="inline-flex h-9 min-w-9 items-center justify-center rounded-md border border-slate-100 bg-slate-50 px-3 text-xs font-black text-slate-400">...</span>
+            {% endif %}
+        {% endfor %}
+
+        {% set next_params = request.args.to_dict() %}
+        {% set _ = next_params.update({'page': pagination.next_num}) %}
+        <a class="inline-flex h-9 items-center justify-center rounded-md border px-3 text-xs font-black uppercase tracking-wide transition {% if pagination.has_next %}border-slate-200 bg-white text-slate-600 hover:bg-slate-50{% else %}pointer-events-none border-slate-100 bg-slate-50 text-slate-300{% endif %}"
+           href="{{ url_for(request.endpoint, **next_params) }}"
+           {% if not pagination.has_next %}aria-disabled="true"{% endif %}>
+            Suivant
+        </a>
+    </div>
+</nav>
+{% endif %}

@@ -6,7 +6,7 @@ import pytest
 
 from app import create_app
 from app.extensions import db
-from app.models import AvanceSalaire, Client, DevisReparation, DossierReparation, Employe, Entreprise, FactureReparation, ParametreSysteme, Salaire, Utilisateur, Vehicule
+from app.models import AvanceSalaire, Client, DevisReparation, DossierReparation, Employe, EntreeChiffreAffaires, Entreprise, FactureReparation, ParametreSysteme, Salaire, Utilisateur, Vehicule
 from app.services.export_salaires import exporter_salaires_excel
 from app.services.import_excel import importer_salaires_excel
 from app.services.parametres import assurer_parametres_defaut, obtenir_entreprise
@@ -134,6 +134,9 @@ def test_tableau_de_bord_connecte_affiche_flux(client, app):
     assert response.status_code == 200
     assert "Démarrer un".encode() in response.data
     assert "Flux atelier en temps réel".encode() in response.data
+    assert b"data-new-dossier-modal" in response.data
+    assert b'href="/dossiers/nouveau"' in response.data
+    assert b'href="/sntl/nouveau"' in response.data
     assert b"DA-" in response.data
 
 
@@ -157,6 +160,8 @@ def test_connexion_refuse_mauvais_mot_de_passe(client):
 
     assert response.status_code == 200
     assert "Identifiant ou mot de passe incorrect".encode() in response.data
+    assert b"data-toast" in response.data
+    assert b'data-toast-tone="danger"' in response.data
 
 
 def test_page_connexion_design_atelier(client):
@@ -254,6 +259,77 @@ def test_gerant_peut_modifier_parametres_systeme(client, app):
     with app.app_context():
         parametre = ParametreSysteme.query.filter_by(cle="delai_paiement_default").first()
         assert parametre.valeur == "45"
+
+
+def test_module_ca_reserve_au_gerant(client):
+    response = client.get("/ca/")
+
+    assert response.status_code == 302
+    assert "/auth/connexion" in response.location
+
+
+def test_gerant_saisit_ca_manuel_et_dashboard_utilise_total_mois(client, app):
+    connecter(client)
+
+    response = client.post(
+        "/ca/",
+        data={
+            "date": "2026-05-30",
+            "montant": "12500,50",
+            "source": "atelier",
+            "libelle": "CA journalier atelier",
+            "notes": "Saisie gerant",
+        },
+    )
+
+    assert response.status_code == 302
+    with app.app_context():
+        entree = EntreeChiffreAffaires.query.first()
+        assert entree is not None
+        assert str(entree.montant) == "12500.50"
+        assert entree.source == "atelier"
+
+    liste = client.get("/ca/?date_debut=2026-05-01&date_fin=2026-05-31")
+    assert liste.status_code == 200
+    assert b"CA journalier atelier" in liste.data
+    assert b"12500.50 MAD" in liste.data
+
+    dashboard = client.get("/tableau-de-bord")
+    assert dashboard.status_code == 200
+    assert b"CA manuel du mois" in dashboard.data
+    assert b"12 500.50 MAD" in dashboard.data
+
+
+def test_filtre_ca_par_date_et_source(client, app):
+    connecter(client)
+    with app.app_context():
+        admin = Utilisateur.query.filter_by(login="admin").first()
+        db.session.add_all(
+            [
+                EntreeChiffreAffaires(
+                    date=date(2026, 4, 30),
+                    montant=1000,
+                    source="atelier",
+                    libelle="CA avril",
+                    created_by_id=admin.id,
+                ),
+                EntreeChiffreAffaires(
+                    date=date(2026, 5, 5),
+                    montant=2000,
+                    source="sntl",
+                    libelle="CA SNTL mai",
+                    created_by_id=admin.id,
+                ),
+            ]
+        )
+        db.session.commit()
+
+    response = client.get("/ca/?date_debut=2026-05-01&date_fin=2026-05-31&source=sntl")
+
+    assert response.status_code == 200
+    assert b"CA SNTL mai" in response.data
+    assert b"CA avril" not in response.data
+    assert b"2000.00 MAD" in response.data
 
 
 def test_liste_clients_demande_connexion(client):
@@ -490,10 +566,45 @@ def test_formulaire_dossier_prepare_filtrage_vehicules_par_client(client, app):
     assert f'value="{vehicule_id}"'.encode() in response.data
     assert b"data-client-type=\"particulier\"" in response.data
     assert b"data-assurance-block" in response.data
-    assert b"600 - Commune Harbil / OR 85" in response.data
-    assert b"100 - Wilaya / OR 83" in response.data
-    assert b"Nouveau client SNTL" in response.data
+    assert b"Administration SNTL" not in response.data
+    assert b"600 - Commune Harbil / OR 85" not in response.data
+    assert b"Nouveau client SNTL" not in response.data
     assert "Sélectionnez un client existant pour afficher uniquement ses véhicules.".encode() in response.data
+
+
+def test_listes_principales_affichent_filtre_date(client):
+    connecter(client)
+
+    for url in ["/dossiers/", "/dossiers/devis", "/factures/", "/clients/", "/sntl/"]:
+        response = client.get(url)
+        assert response.status_code == 200
+        assert b'name="date_debut"' in response.data
+        assert b'name="date_fin"' in response.data
+
+
+def test_filtre_date_clients_restreint_par_date_creation(client, app):
+    connecter(client)
+    with app.app_context():
+        ancien = Client(
+            code="DATE-OLD",
+            type="particulier",
+            nom="Client Date Ancien",
+            created_at=datetime(2026, 1, 5, tzinfo=timezone.utc),
+        )
+        recent = Client(
+            code="DATE-NEW",
+            type="particulier",
+            nom="Client Date Recent",
+            created_at=datetime(2026, 2, 5, tzinfo=timezone.utc),
+        )
+        db.session.add_all([ancien, recent])
+        db.session.commit()
+
+    response = client.get("/clients/?date_debut=2026-02-01&date_fin=2026-02-28")
+
+    assert response.status_code == 200
+    assert b"Client Date Recent" in response.data
+    assert b"Client Date Ancien" not in response.data
 
 
 def test_creation_dossier_particulier_enregistre_assurance(client, app):
@@ -537,11 +648,10 @@ def test_creation_dossier_sntl_force_immatriculation_administrative(client, app)
         client_id = client_db.id
 
     response = client.post(
-        "/dossiers/nouveau",
+        "/sntl/nouveau",
         data={
-            "mode_client": "existant",
-            "client_id": str(client_id),
-            "mode_vehicule": "nouveau",
+            "sntl_client_choice": f"existing:{client_id}",
+            "sntl_vehicle_choice": "new",
             "vehicule_immatriculation": "2020-S-6",
             "vehicule_marque": "Ford",
             "vehicule_modele": "Ranger",
@@ -568,11 +678,10 @@ def test_creation_dossier_sntl_predefini_cree_client_code_or(client, app):
     connecter(client)
 
     response = client.post(
-        "/dossiers/nouveau",
+        "/sntl/nouveau",
         data={
-            "mode_client": "nouveau",
-            "client_type": "sntl",
-            "client_sntl_preset": "600-85",
+            "sntl_client_choice": "preset:600-85",
+            "sntl_vehicle_choice": "new",
             "client_nom": "",
             "client_code": "",
             "client_ice": "ICE600HAR",
@@ -616,12 +725,10 @@ def test_creation_dossier_sntl_predefini_reutilise_client_existant(client, app):
         client_id = client_db.id
 
     response = client.post(
-        "/dossiers/nouveau",
+        "/sntl/nouveau",
         data={
-            "mode_client": "nouveau",
-            "client_type": "sntl",
-            "client_sntl_preset": "100-83",
-            "mode_vehicule": "nouveau",
+            "sntl_client_choice": "preset:100-83",
+            "sntl_vehicle_choice": "new",
             "vehicule_immatriculation": "J100083",
             "vehicule_marque": "Dacia",
             "vehicule_modele": "Duster",
@@ -645,11 +752,10 @@ def test_creation_dossier_sntl_custom_reste_possible(client, app):
     connecter(client)
 
     response = client.post(
-        "/dossiers/nouveau",
+        "/sntl/nouveau",
         data={
-            "mode_client": "nouveau",
-            "client_type": "sntl",
-            "client_sntl_preset": "custom",
+            "sntl_client_choice": "custom",
+            "sntl_vehicle_choice": "new",
             "client_nom": "Nouvelle Administration SNTL",
             "client_code": "900",
             "client_ville": "Marrakech",
@@ -673,6 +779,118 @@ def test_creation_dossier_sntl_custom_reste_possible(client, app):
         assert client_db is not None
         assert client_db.type == "sntl"
         assert client_db.nom == "Nouvelle Administration SNTL"
+
+
+def test_module_sntl_cree_dossier_dedie_et_separe_liste_atelier(client, app):
+    connecter(client)
+
+    form = client.get("/sntl/nouveau")
+    assert form.status_code == 200
+    assert b"Nouvelle prise en charge SNTL" in form.data
+    assert b"data-sntl-client-choice" in form.data
+    assert b"data-sntl-vehicle-choice" in form.data
+    assert b"600 - Commune Harbil / OR 85" in form.data
+    assert b'name="mode_client"' not in form.data
+
+    response = client.post(
+        "/sntl/nouveau",
+        data={
+            "sntl_client_choice": "preset:600-85",
+            "sntl_vehicle_choice": "new",
+            "client_ice": "ICE-HARBIL",
+            "client_ville": "Marrakech",
+            "mode_vehicule": "nouveau",
+            "vehicule_immatriculation": "J600085",
+            "vehicule_marque": "Ford",
+            "vehicule_modele": "Transit",
+            "vehicule_type": "utilitaire",
+            "vehicule_carburant": "diesel",
+            "numero_bon_sntl": "",
+            "demande_client": "Module SNTL Harbil",
+            "diagnostic_initial": "",
+            "kilometrage_entree": "",
+            "notes": "",
+        },
+    )
+
+    assert response.status_code == 302
+    with app.app_context():
+        dossier = DossierReparation.query.first()
+        dossier_id = dossier.id
+        assert dossier.client.type == "sntl"
+        assert dossier.numero_bon_sntl.isdigit()
+        assert len(dossier.numero_bon_sntl) == 12
+        assert dossier.vehicule.type_immatriculation == "administrative"
+
+    atelier = client.get("/dossiers/")
+    assert atelier.status_code == 200
+    assert b"Commune Harbil" not in atelier.data
+
+    sntl_liste = client.get("/sntl/")
+    assert sntl_liste.status_code == 200
+    assert b"Commune Harbil" in sntl_liste.data
+
+    detail = client.get(f"/sntl/{dossier_id}")
+    assert detail.status_code == 200
+    assert b"Workflow SNTL" in detail.data
+
+    ancien_detail = client.get(f"/dossiers/{dossier_id}")
+    assert ancien_detail.status_code == 302
+    assert f"/sntl/{dossier_id}" in ancien_detail.location
+
+
+def test_module_sntl_workflow_devis_facture(client, app):
+    connecter(client)
+    client.post(
+        "/sntl/nouveau",
+        data={
+            "sntl_client_choice": "custom",
+            "sntl_vehicle_choice": "new",
+            "client_nom": "Administration SNTL Test",
+            "client_code": "SNTL-T",
+            "client_ville": "Marrakech",
+            "mode_vehicule": "nouveau",
+            "vehicule_immatriculation": "J123456",
+            "vehicule_marque": "Renault",
+            "vehicule_modele": "Master",
+            "vehicule_type": "utilitaire",
+            "vehicule_carburant": "diesel",
+            "numero_bon_sntl": "260429000099",
+            "demande_client": "Workflow SNTL complet",
+            "diagnostic_initial": "",
+            "kilometrage_entree": "",
+            "notes": "",
+        },
+    )
+    with app.app_context():
+        dossier_id = DossierReparation.query.first().id
+
+    client.post(
+        f"/sntl/{dossier_id}/devis/nouveau",
+        data={
+            "objet": "Devis SNTL",
+            "designation_1": "Piece officielle",
+            "quantite_1": "1",
+            "prix_unitaire_ht_1": "100",
+        },
+    )
+    with app.app_context():
+        dossier = db.session.get(DossierReparation, dossier_id)
+        devis_id = dossier.dernier_devis.id
+        assert dossier.statut == "pending_approval"
+        assert dossier.dernier_devis.lignes[0].etat_piece == "neuf"
+
+    client.post(f"/sntl/devis/{devis_id}/approuver", data={"mode_accord": "systeme"})
+    client.post(f"/sntl/{dossier_id}/terminer")
+    facture_response = client.post(f"/sntl/{dossier_id}/facturer")
+
+    assert facture_response.status_code == 302
+    with app.app_context():
+        dossier = db.session.get(DossierReparation, dossier_id)
+        facture = FactureReparation.query.first()
+        assert dossier.statut == "completed"
+        assert facture is not None
+        assert facture.dossier_id == dossier_id
 
 
 def test_creation_dossier_cree_client_et_vehicule(client, app):
@@ -930,12 +1148,11 @@ def test_devis_sntl_force_pieces_neuves(client, app):
         client_id, vehicule_id = client_db.id, vehicule.id
 
     client.post(
-        "/dossiers/nouveau",
+        "/sntl/nouveau",
         data={
-            "mode_client": "existant",
-            "mode_vehicule": "existant",
-            "client_id": str(client_id),
-            "vehicule_id": str(vehicule_id),
+            "sntl_client_choice": f"existing:{client_id}",
+            "sntl_vehicle_choice": f"existing:{vehicule_id}",
+            "numero_bon_sntl": "",
             "demande_client": "Réparation flotte",
             "diagnostic_initial": "",
             "kilometrage_entree": "",
@@ -946,7 +1163,7 @@ def test_devis_sntl_force_pieces_neuves(client, app):
         dossier_id = DossierReparation.query.first().id
 
     client.post(
-        f"/dossiers/{dossier_id}/devis/nouveau",
+        f"/sntl/{dossier_id}/devis/nouveau",
         data={
             "objet": "SNTL",
             "designation": ["Alternateur"],
@@ -1472,12 +1689,10 @@ def test_export_facture_sntl_ajoute_commission(client, app):
         vehicule_id = vehicule.id
 
     client.post(
-        "/dossiers/nouveau",
+        "/sntl/nouveau",
         data={
-            "mode_client": "existant",
-            "mode_vehicule": "existant",
-            "client_id": str(client_id),
-            "vehicule_id": str(vehicule_id),
+            "sntl_client_choice": f"existing:{client_id}",
+            "sntl_vehicle_choice": f"existing:{vehicule_id}",
             "demande_client": "Freinage",
             "diagnostic_initial": "",
             "kilometrage_entree": "333000",
@@ -1488,7 +1703,7 @@ def test_export_facture_sntl_ajoute_commission(client, app):
     with app.app_context():
         dossier_id = DossierReparation.query.first().id
     client.post(
-        f"/dossiers/{dossier_id}/devis/nouveau",
+        f"/sntl/{dossier_id}/devis/nouveau",
         data={
             "objet": "Freinage",
             "designation_1": "PLAQUETTE DE FREIN",
@@ -1531,9 +1746,9 @@ def test_export_facture_sntl_ajoute_commission(client, app):
     assert b"0207789 - J" in devis_pdf.data
     assert b"ETAT" not in devis_pdf.data
     assert b"Commission SNTL" not in devis_pdf.data
-    client.post(f"/dossiers/devis/{devis_id}/approuver", data={"mode_accord": "telephone"})
-    client.post(f"/dossiers/{dossier_id}/terminer")
-    client.post(f"/factures/dossiers/{dossier_id}/generer")
+    client.post(f"/sntl/devis/{devis_id}/approuver", data={"mode_accord": "telephone"})
+    client.post(f"/sntl/{dossier_id}/terminer")
+    client.post(f"/sntl/{dossier_id}/facturer")
     with app.app_context():
         facture_id = FactureReparation.query.first().id
 
@@ -1600,6 +1815,26 @@ def test_export_facture_sntl_ajoute_commission(client, app):
     assert b"Montant Net" in facture_pdf.data
     assert b"ETAT" not in facture_pdf.data
 
+    releve_response = client.get(f"/factures/clients/{client_id}/releve")
+    assert releve_response.status_code == 200
+    releve_ws = load_workbook(BytesIO(releve_response.data), data_only=False).active
+    assert releve_ws["D11"].value == "Relevé des Factures"
+    assert releve_ws["B31"].value == "N° Facture"
+    assert releve_ws["F31"].value == "Commission SNTL"
+    assert releve_ws["G31"].value == "Montant à régler"
+    assert releve_ws["E32"].value == 1200
+    assert releve_ws["F32"].value == 120
+    assert releve_ws["G32"].value == 1080
+    situation_response = client.get("/factures/clients/situation-financiere")
+    assert situation_response.status_code == 200
+    situation_wb = load_workbook(BytesIO(situation_response.data), data_only=False)
+    sntl_sheets = [name for name in situation_wb.sheetnames if name.startswith("SNTL -")]
+    assert len(sntl_sheets) == 1
+    sntl_sheet = situation_wb[sntl_sheets[0]]
+    assert sntl_sheet["D11"].value == "Relevé des Factures"
+    assert sntl_sheet["F31"].value == "Commission SNTL"
+    assert sntl_sheet["G32"].value == 1080
+
 
 def test_export_releve_client_excel(client, app):
     connecter(client)
@@ -1661,6 +1896,21 @@ def test_export_releve_client_excel(client, app):
     assert resume["C9"].value == 1
     assert resume["D9"].value == 360
     assert resume["F9"].value == 360
+
+    situation = client.get("/factures/clients/situation-financiere")
+    assert situation.status_code == 200
+    situation_wb = load_workbook(BytesIO(situation.data), data_only=False)
+    summary = situation_wb["SITUATION GLOBALE"]
+    assert summary["A9"].value == "CLIENT"
+    assert summary["D9"].value == "MONTANT TTC"
+    assert summary["E9"].value == "COMMISSION SNTL"
+    assert summary["F9"].value == "NET A REGLER"
+    assert summary["A10"].value == "Client Workflow"
+    assert summary["C10"].value == 2
+    assert summary["D10"].value == 600
+    assert summary["E10"].value == 0
+    assert summary["F10"].value == 600
+    assert "SITUATION - Client Workflow" in situation_wb.sheetnames
 
 
 def _classeur_salaires(lignes):

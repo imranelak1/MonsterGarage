@@ -1,5 +1,23 @@
 {% extends "base.html" %}
 
+{% macro icon(name, class_name='h-4 w-4') %}
+    {% if name == 'search' %}
+        <svg class="{{ class_name }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    {% elif name == 'plus-user' %}
+        <svg class="{{ class_name }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg>
+    {% elif name == 'user' %}
+        <svg class="{{ class_name }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>
+    {% elif name == 'folder-plus' %}
+        <svg class="{{ class_name }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 10v6"/><path d="M9 13h6"/><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.6-.8L9.6 4A2 2 0 0 0 8 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+    {% elif name == 'file' %}
+        <svg class="{{ class_name }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>
+    {% elif name == 'phone' %}
+        <svg class="{{ class_name }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.4 19.4 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.7.6 2.5a2 2 0 0 1-.5 2.1L8 9.5a16 16 0 0 0 6.5 6.5l1.2-1.2a2 2 0 0 1 2.1-.5c.8.3 1.6.5 2.5.6a2 2 0 0 1 1.7 2Z"/></svg>
+    {% else %}
+        <svg class="{{ class_name }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 7h18"/><path d="M3 12h18"/><path d="M3 17h18"/></svg>
+    {% endif %}
+{% endmacro %}
+
 {% block title %}Clients - Monster Garage{% endblock %}
 
 {% block content %}
@@ -8,36 +26,45 @@
         <p class="text-sm font-semibold text-slate-500">CRM atelier</p>
         <h1 class="mt-1 text-3xl font-black tracking-tight text-slate-950">Clients</h1>
     </div>
-    <a class="inline-flex h-10 items-center justify-center rounded-md bg-monster-jaune px-4 text-sm font-black text-black transition hover:bg-yellow-300 focus:outline-none focus:ring-4 focus:ring-yellow-200" href="{{ url_for('clients.nouveau') }}">Nouveau client</a>
+    <a class="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-monster-jaune px-4 text-sm font-black text-black transition hover:bg-yellow-300 focus:outline-none focus:ring-4 focus:ring-yellow-200" href="{{ url_for('clients.nouveau') }}">
+        {{ icon('plus-user', 'h-4 w-4') }}
+        Nouveau client
+    </a>
 </section>
 
-<section class="mb-5 grid gap-3 md:grid-cols-4">
-    <article class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <p class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Clients</p>
-        <p class="mt-2 text-2xl font-black text-slate-950">{{ stats.total }}</p>
+<section class="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+    {% for stat in [
+        {'label': 'Total clients', 'value': stats.total, 'class': 'border-slate-200 bg-white text-slate-950', 'label_class': 'text-slate-400'},
+        {'label': 'Particuliers', 'value': stats.particuliers, 'class': 'border-slate-200 bg-white text-slate-950', 'label_class': 'text-slate-400'},
+        {'label': 'Administrations', 'value': stats.administrations, 'class': 'border-blue-100 bg-blue-50 text-blue-950', 'label_class': 'text-blue-600'},
+        {'label': 'SNTL', 'value': stats.sntl, 'class': 'border-yellow-200 bg-yellow-50 text-black', 'label_class': 'text-yellow-700'},
+        {'label': 'Dossiers ouverts', 'value': stats.dossiers_ouverts, 'class': 'border-orange-100 bg-orange-50 text-orange-950', 'label_class': 'text-orange-700'},
+    ] %}
+    <article class="rounded-lg border p-4 shadow-sm {{ stat.class }}">
+        <p class="text-[10px] font-black uppercase tracking-[0.16em] {{ stat.label_class }}">{{ stat.label }}</p>
+        <p class="mt-2 text-2xl font-black">{{ stat.value }}</p>
     </article>
-    <article class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <p class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Particuliers</p>
-        <p class="mt-2 text-2xl font-black text-slate-950">{{ stats.particuliers }}</p>
-    </article>
-    <article class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <p class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Administrations</p>
-        <p class="mt-2 text-2xl font-black text-slate-950">{{ stats.administrations }}</p>
-    </article>
-    <article class="rounded-lg border border-yellow-200 bg-yellow-50 p-4 shadow-sm">
-        <p class="text-[10px] font-black uppercase tracking-[0.16em] text-yellow-700">Dossiers ouverts</p>
-        <p class="mt-2 text-2xl font-black text-black">{{ stats.dossiers_ouverts }}</p>
-    </article>
+    {% endfor %}
 </section>
 
-<section class="mb-5 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-    <form class="grid gap-3 lg:grid-cols-[1fr_auto]" method="get">
-        <input class="h-11 min-w-0 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" type="search" name="q" value="{{ recherche }}" placeholder="Rechercher nom, code, téléphone, ICE...">
+<section class="mb-5 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <form class="flex flex-col gap-3 xl:flex-row xl:items-center" method="get">
+        <label class="relative min-w-0 flex-1">
+            <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">{{ icon('search', 'h-4 w-4') }}</span>
+            <span class="sr-only">Rechercher</span>
+            <input class="h-11 w-full rounded-md border border-slate-300 py-0 pl-10 pr-3 text-sm font-semibold outline-none transition placeholder:text-slate-400 focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" type="search" name="q" value="{{ recherche }}" placeholder="Rechercher nom, code, telephone, ICE...">
+        </label>
+        <input class="h-10 rounded-md border border-slate-300 px-3 text-sm font-semibold text-slate-700 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" type="date" name="date_debut" value="{{ periode.valeur_debut }}" aria-label="Date debut">
+        <input class="h-10 rounded-md border border-slate-300 px-3 text-sm font-semibold text-slate-700 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" type="date" name="date_fin" value="{{ periode.valeur_fin }}" aria-label="Date fin">
         <div class="flex flex-wrap gap-2">
             {% for value, label in [('', 'Tous'), ('particulier', 'Particuliers'), ('administration', 'Administrations'), ('sntl', 'SNTL')] %}
-            <button class="h-11 rounded-md border px-4 text-xs font-black uppercase tracking-wide transition {% if type_client == value %}border-yellow-300 bg-yellow-100 text-black{% else %}border-slate-200 bg-white text-slate-600 hover:bg-slate-50{% endif %}" name="type" value="{{ value }}" type="submit">{{ label }}</button>
+                {% set active = type_client == value %}
+                <button class="h-10 rounded-md border px-4 text-xs font-black uppercase tracking-wide transition {% if active and value == 'sntl' %}border-yellow-300 bg-monster-jaune text-black{% elif active %}border-slate-950 bg-slate-950 text-white{% else %}border-slate-200 bg-white text-slate-600 hover:bg-slate-50{% endif %}" name="type" value="{{ value }}" type="submit">{{ label }}</button>
             {% endfor %}
-            <button class="h-11 rounded-md bg-slate-950 px-4 text-xs font-black uppercase tracking-wide text-white" type="submit">Rechercher</button>
+            <button class="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-slate-950 px-4 text-xs font-black uppercase tracking-wide text-white transition hover:bg-black" type="submit">
+                {{ icon('search', 'h-3.5 w-3.5') }}
+                Rechercher
+            </button>
         </div>
     </form>
 </section>
@@ -45,15 +72,17 @@
 <section class="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
     {% for item in resumes %}
     {% set client = item.client %}
-    <article class="group rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-yellow-200 hover:shadow-lg hover:shadow-slate-200/70">
-        <div class="flex items-start justify-between gap-4">
+    {% set detail_url = url_for('clients.detail', client_id=client.id) %}
+    {% set dossier_url = url_for('sntl.nouveau') if client.type == 'sntl' else url_for('dossiers.nouveau') %}
+    <article class="group overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-yellow-200 hover:shadow-lg hover:shadow-slate-200/70">
+        <div class="flex items-start justify-between gap-4 p-4">
             <div class="flex min-w-0 gap-3">
-                <div class="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-slate-950 text-sm font-black text-monster-jaune">
+                <div class="grid h-12 w-12 shrink-0 place-items-center rounded-xl text-sm font-black {% if client.type == 'sntl' %}bg-yellow-100 text-yellow-800{% elif client.type == 'administration' %}bg-blue-50 text-blue-700{% else %}bg-slate-950 text-monster-jaune{% endif %}">
                     {{ client.nom[:2]|upper }}
                 </div>
                 <div class="min-w-0">
-                    <p class="truncate text-lg font-black text-slate-950">{{ client.nom }}</p>
-                    <p class="mt-0.5 text-xs font-bold text-slate-400">{{ client.code }}{% if client.sigle %} · {{ client.sigle }}{% endif %}</p>
+                    <p class="truncate text-lg font-black leading-tight text-slate-950">{{ client.nom }}</p>
+                    <p class="mt-1 truncate text-xs font-bold text-slate-400">{{ client.code }}{% if client.sigle %} - {{ client.sigle }}{% endif %}</p>
                 </div>
             </div>
             <span class="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black uppercase {% if client.type == 'sntl' %}bg-yellow-100 text-yellow-800{% elif client.type == 'administration' %}bg-blue-100 text-blue-700{% else %}bg-slate-100 text-slate-600{% endif %}">
@@ -61,44 +90,59 @@
             </span>
         </div>
 
-        <div class="mt-4 grid grid-cols-3 gap-2 text-center">
-            <div class="rounded-md bg-slate-50 px-2 py-2">
-                <p class="text-lg font-black text-slate-950">{{ item.vehicules_count }}</p>
-                <p class="text-[9px] font-black uppercase text-slate-400">Véhicules</p>
+        <div class="grid grid-cols-3 border-y border-slate-100 bg-slate-100 text-center">
+            <div class="bg-white px-2 py-3">
+                <p class="text-lg font-black leading-none text-slate-950">{{ item.vehicules_count }}</p>
+                <p class="mt-1 text-[9px] font-black uppercase tracking-wide text-slate-400">Vehicules</p>
             </div>
-            <div class="rounded-md bg-slate-50 px-2 py-2">
-                <p class="text-lg font-black text-slate-950">{{ item.dossiers_count }}</p>
-                <p class="text-[9px] font-black uppercase text-slate-400">Dossiers</p>
+            <div class="bg-white px-2 py-3">
+                <p class="text-lg font-black leading-none text-slate-950">{{ item.dossiers_count }}</p>
+                <p class="mt-1 text-[9px] font-black uppercase tracking-wide text-slate-400">Dossiers</p>
             </div>
-            <div class="rounded-md {% if item.dossiers_ouverts %}bg-yellow-50{% else %}bg-slate-50{% endif %} px-2 py-2">
-                <p class="text-lg font-black {% if item.dossiers_ouverts %}text-yellow-800{% else %}text-slate-950{% endif %}">{{ item.dossiers_ouverts }}</p>
-                <p class="text-[9px] font-black uppercase text-slate-400">Ouverts</p>
+            <div class="{% if item.dossiers_ouverts %}bg-yellow-50{% else %}bg-white{% endif %} px-2 py-3">
+                <p class="text-lg font-black leading-none {% if item.dossiers_ouverts %}text-yellow-800{% else %}text-slate-950{% endif %}">{{ item.dossiers_ouverts }}</p>
+                <p class="mt-1 text-[9px] font-black uppercase tracking-wide text-slate-400">Ouverts</p>
             </div>
         </div>
 
-        <div class="mt-4 grid gap-2 text-sm">
-            <div class="flex justify-between gap-3">
-                <span class="font-semibold text-slate-500">Téléphone</span>
+        <div class="grid gap-2 p-4 text-sm">
+            <div class="flex items-center justify-between gap-3">
+                <span class="inline-flex items-center gap-1.5 font-semibold text-slate-500">{{ icon('phone', 'h-3.5 w-3.5') }} Telephone</span>
                 <span class="truncate font-bold text-slate-800">{{ client.telephone or "-" }}</span>
             </div>
-            <div class="flex justify-between gap-3">
-                <span class="font-semibold text-slate-500">Dernier dossier</span>
+            <div class="flex items-center justify-between gap-3">
+                <span class="inline-flex items-center gap-1.5 font-semibold text-slate-500">{{ icon('file', 'h-3.5 w-3.5') }} Dernier dossier</span>
                 {% if item.dernier_dossier %}
-                <a class="font-black text-yellow-700 hover:text-yellow-900" href="{{ url_for('dossiers.detail', dossier_id=item.dernier_dossier.id) }}">{{ item.dernier_dossier.numero }}</a>
+                    {% set dernier_url = url_for('sntl.detail', dossier_id=item.dernier_dossier.id) if client.type == 'sntl' else url_for('dossiers.detail', dossier_id=item.dernier_dossier.id) %}
+                    <a class="font-black text-yellow-700 hover:text-yellow-900" href="{{ dernier_url }}">{{ item.dernier_dossier.numero }}</a>
                 {% else %}
-                <span class="font-bold text-slate-400">Aucun</span>
+                    <span class="font-bold text-slate-400">Aucun</span>
                 {% endif %}
+            </div>
+            <div class="flex items-center justify-between gap-3">
+                <span class="font-semibold text-slate-500">Cree le</span>
+                <span class="font-bold text-slate-800">{{ client.created_at.strftime("%d/%m/%Y") }}</span>
             </div>
         </div>
 
-        <div class="mt-4 grid grid-cols-3 gap-2 border-t border-slate-100 pt-4">
-            <a class="inline-flex h-9 items-center justify-center rounded-md bg-slate-950 px-3 text-[10px] font-black uppercase text-white" href="{{ url_for('clients.detail', client_id=client.id) }}">Fiche</a>
-            <a class="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-[10px] font-black uppercase text-slate-700 hover:bg-slate-50" href="{{ url_for('dossiers.nouveau') }}">Dossier</a>
-            <a class="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-[10px] font-black uppercase text-slate-700 hover:bg-slate-50" href="{{ url_for('factures.releve_client', client_id=client.id) }}">Relevé</a>
+        <div class="grid grid-cols-3 gap-2 border-t border-slate-100 p-4">
+            <a class="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-slate-950 px-3 text-[10px] font-black uppercase text-white transition hover:bg-black" href="{{ detail_url }}">
+                {{ icon('user', 'h-3.5 w-3.5') }}
+                Fiche
+            </a>
+            <a class="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border px-3 text-[10px] font-black uppercase transition {% if client.type == 'sntl' %}border-yellow-300 bg-yellow-50 text-yellow-800 hover:bg-yellow-100{% else %}border-slate-200 bg-white text-slate-700 hover:bg-slate-50{% endif %}" href="{{ dossier_url }}">
+                {{ icon('folder-plus', 'h-3.5 w-3.5') }}
+                Dossier
+            </a>
+            <a class="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-[10px] font-black uppercase text-slate-700 transition hover:bg-slate-50" href="{{ url_for('factures.releve_client', client_id=client.id) }}">
+                {{ icon('file', 'h-3.5 w-3.5') }}
+                Releve
+            </a>
         </div>
     </article>
     {% else %}
     <p class="rounded-lg border border-slate-200 bg-white px-4 py-8 text-center text-sm font-semibold text-slate-500 md:col-span-2 2xl:col-span-3">Aucun client pour le moment.</p>
     {% endfor %}
 </section>
+{% include "partials/pagination.html" %}
 {% endblock %}

@@ -26,19 +26,23 @@ def create_app(config_name: str = "development") -> Flask:
 
 def register_blueprints(app: Flask) -> None:
     from app.routes.auth import bp as auth_bp
+    from app.routes.chiffre_affaires import bp as chiffre_affaires_bp
     from app.routes.clients import bp as clients_bp
     from app.routes.dashboard import bp as dashboard_bp
     from app.routes.dossiers import bp as dossiers_bp
     from app.routes.factures import bp as factures_bp
     from app.routes.parametres import bp as parametres_bp
     from app.routes.rh import bp as rh_bp
+    from app.routes.sntl import bp as sntl_bp
     from app.routes.vehicules import bp as vehicules_bp
 
     app.register_blueprint(auth_bp)
+    app.register_blueprint(chiffre_affaires_bp)
     app.register_blueprint(clients_bp)
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(dossiers_bp)
     app.register_blueprint(factures_bp)
     app.register_blueprint(parametres_bp)
     app.register_blueprint(rh_bp)
+    app.register_blueprint(sntl_bp)
     app.register_blueprint(vehicules_bp)

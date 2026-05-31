@@ -13,10 +13,35 @@
 </head>
 <body class="mg-shell">
     {% if current_user.is_authenticated %}
+        {% macro nav_icon(name) -%}
+            {% if name == 'dashboard' %}
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="8" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="15" width="7" height="6" rx="1.5"/></svg>
+            {% elif name == 'atelier' %}
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0 5 5L11 20H6v-5l8.7-8.7Z"/><path d="m14 7 3 3"/></svg>
+            {% elif name == 'sntl' %}
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 17h4V5H4v12h2"/><path d="M14 9h3l3 4v4h-2"/><circle cx="8" cy="17" r="2"/><circle cx="16" cy="17" r="2"/></svg>
+            {% elif name == 'devis' %}
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>
+            {% elif name == 'factures' %}
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2Z"/><path d="M8 7h8"/><path d="M8 11h8"/><path d="M8 15h5"/></svg>
+            {% elif name == 'clients' %}
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9"/><path d="M16 3.1a4 4 0 0 1 0 7.8"/></svg>
+            {% elif name == 'vehicules' %}
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 17h2l-1.8-5.4A3 3 0 0 0 16.4 9H7.6a3 3 0 0 0-2.8 2.6L3 17h2"/><path d="M7 17h10"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg>
+            {% elif name == 'stock' %}
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m21 8-9-5-9 5 9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>
+            {% elif name == 'rh' %}
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M6 21v-2a6 6 0 0 1 12 0v2"/><path d="M19 8h3"/><path d="M20.5 6.5v3"/></svg>
+            {% elif name == 'ca' %}
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-7"/><path d="M18 7h1v1"/></svg>
+            {% elif name == 'settings' %}
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1A2 2 0 1 1 4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.3 7A2 2 0 1 1 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3h.1a1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1A2 2 0 1 1 19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.6 1h.1a2 2 0 1 1 0 4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg>
+            {% endif %}
+        {%- endmacro %}
         {% macro nav_link(endpoint_prefix, href, label, icon) -%}
             {% set active = (request.endpoint or '').startswith(endpoint_prefix) %}
             <a class="mg-nav-link {% if active %}mg-nav-link-active{% endif %}" href="{{ href }}">
-                <span class="mg-nav-icon">{{ icon }}</span>
+                <span class="mg-nav-icon">{{ nav_icon(icon) }}</span>
                 <span>{{ label }}</span>
             </a>
         {%- endmacro %}
@@ -40,26 +65,27 @@
                     <section class="grid gap-2">
                         <p class="mg-nav-section">Principal</p>
                         <div class="grid gap-1">
-                            {{ nav_link('dashboard.', url_for('dashboard.accueil'), 'Tableau de bord', 'TB') }}
+                            {{ nav_link('dashboard.', url_for('dashboard.accueil'), 'Tableau de bord', 'dashboard') }}
                             <a class="mg-nav-link {% if current_endpoint.startswith('dossiers.') and 'devis' not in current_endpoint %}mg-nav-link-active{% endif %}" href="{{ url_for('dossiers.liste') }}">
-                                <span class="mg-nav-icon">AT</span>
+                                <span class="mg-nav-icon">{{ nav_icon('atelier') }}</span>
                                 <span>Atelier & opérations</span>
                             </a>
+                            {{ nav_link('sntl.', url_for('sntl.liste'), 'Module SNTL', 'sntl') }}
                             <a class="mg-nav-link {% if current_endpoint.startswith('dossiers.') and 'devis' in current_endpoint %}mg-nav-link-active{% endif %}" href="{{ url_for('dossiers.liste_devis') }}">
-                                <span class="mg-nav-icon">DV</span>
+                                <span class="mg-nav-icon">{{ nav_icon('devis') }}</span>
                                 <span>Devis</span>
                             </a>
-                            {{ nav_link('factures.', url_for('factures.liste'), 'Facturation', 'FC') }}
+                            {{ nav_link('factures.', url_for('factures.liste'), 'Facturation', 'factures') }}
                         </div>
                     </section>
 
                     <section class="grid gap-2">
                         <p class="mg-nav-section">Gestion</p>
                         <div class="grid gap-1">
-                            {{ nav_link('clients.', url_for('clients.liste'), 'Clients & CRM', 'CL') }}
-                            {{ nav_link('vehicules.', url_for('vehicules.liste'), 'Véhicules', 'VH') }}
+                            {{ nav_link('clients.', url_for('clients.liste'), 'Clients & CRM', 'clients') }}
+                            {{ nav_link('vehicules.', url_for('vehicules.liste'), 'Véhicules', 'vehicules') }}
                             <a class="mg-nav-link" href="#">
-                                <span class="mg-nav-icon">AP</span>
+                                <span class="mg-nav-icon">{{ nav_icon('stock') }}</span>
                                 <span>Approvisionnements</span>
                             </a>
                         </div>
@@ -68,12 +94,9 @@
                     <section class="grid gap-2">
                         <p class="mg-nav-section">Pilotage</p>
                         <div class="grid gap-1">
-                            {{ nav_link('rh.', url_for('rh.vue_mensuelle'), 'Ressources Humaines', 'RH') }}
-                            <a class="mg-nav-link" href="#">
-                                <span class="mg-nav-icon">RP</span>
-                                <span>Rapports</span>
-                            </a>
-                            {{ nav_link('parametres.', url_for('parametres.entreprise'), 'Paramètres', 'PR') }}
+                            {{ nav_link('rh.', url_for('rh.vue_mensuelle'), 'Ressources Humaines', 'rh') }}
+                            {{ nav_link('chiffre_affaires.', url_for('chiffre_affaires.liste'), 'Chiffre d affaires', 'ca') }}
+                            {{ nav_link('parametres.', url_for('parametres.entreprise'), 'Paramètres', 'settings') }}
                         </div>
                     </section>
                 </nav>
@@ -106,9 +129,9 @@
                 </div>
 
                 <div class="flex items-center gap-3">
-                    <a class="hidden h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-black uppercase tracking-[0.12em] text-slate-700 shadow-sm transition hover:border-slate-300 hover:text-black sm:inline-flex" href="{{ url_for('dossiers.nouveau') }}">
+                    <button class="hidden h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-black uppercase tracking-[0.12em] text-slate-700 shadow-sm transition hover:border-slate-300 hover:text-black sm:inline-flex" type="button" data-new-dossier-choice>
                         Nouveau dossier
-                    </a>
+                    </button>
                     <div class="hidden items-center gap-3 rounded-xl border border-slate-200 bg-white py-1.5 pl-2 pr-3 shadow-sm sm:flex" data-user-topbar>
                         <div class="grid h-9 w-9 place-items-center rounded-xl bg-black text-xs font-black text-monster-jaune">
                             {{ current_user.nom_complet[:2]|upper }}
@@ -125,9 +148,33 @@
             </header>
 
             <main class="mg-content">
-                {% include "partials/messages.html" %}
                 {% block content %}{% endblock %}
             </main>
+            {% include "partials/messages.html" %}
+
+            <div class="fixed inset-0 z-50 hidden items-center justify-center bg-black/60 p-4" data-new-dossier-modal>
+                <div class="w-full max-w-xl rounded-xl border border-slate-200 bg-white p-5 shadow-2xl">
+                    <div class="flex items-start justify-between gap-4">
+                        <div>
+                            <p class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Nouvelle prise en charge</p>
+                            <h2 class="mt-1 text-2xl font-black tracking-tight text-slate-950">Choisir le flux dossier</h2>
+                        </div>
+                        <button class="grid h-9 w-9 place-items-center rounded-md border border-slate-200 bg-white text-lg font-black text-slate-500 transition hover:bg-slate-50" type="button" data-new-dossier-close aria-label="Fermer">x</button>
+                    </div>
+                    <div class="mt-5 grid gap-3 sm:grid-cols-2">
+                        <a class="rounded-lg border border-slate-200 bg-white p-4 transition hover:border-yellow-300 hover:bg-yellow-50" href="{{ url_for('dossiers.nouveau') }}">
+                            <span class="grid h-10 w-10 place-items-center rounded-md bg-slate-950 text-monster-jaune [&>svg]:h-5 [&>svg]:w-5">{{ nav_icon('atelier') }}</span>
+                            <strong class="mt-4 block text-lg font-black text-slate-950">Dossier atelier</strong>
+                            <span class="mt-1 block text-sm font-semibold leading-5 text-slate-500">Particulier ou administration hors SNTL.</span>
+                        </a>
+                        <a class="rounded-lg border border-yellow-300 bg-yellow-50 p-4 transition hover:bg-yellow-100" href="{{ url_for('sntl.nouveau') }}">
+                            <span class="grid h-10 w-10 place-items-center rounded-md bg-monster-jaune text-black [&>svg]:h-5 [&>svg]:w-5">{{ nav_icon('sntl') }}</span>
+                            <strong class="mt-4 block text-lg font-black text-slate-950">Dossier SNTL</strong>
+                            <span class="mt-1 block text-sm font-semibold leading-5 text-slate-600">Bon SNTL, matricule administratif et documents officiels.</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
         </div>
     {% else %}
         <main class="min-h-screen bg-[#111111] text-slate-950">
@@ -162,9 +209,47 @@
                 button.addEventListener("click", () => root.classList.remove("mg-sidebar-open"));
             });
 
+            const closeToast = (toast) => {
+                if (!toast || toast.dataset.closing === "true") return;
+                toast.dataset.closing = "true";
+                window.setTimeout(() => toast.remove(), 220);
+            };
+
+            document.querySelectorAll("[data-toast]").forEach((toast) => {
+                const tone = toast.dataset.toastTone;
+                const timeout = tone === "danger" ? 8500 : 5500;
+                window.setTimeout(() => closeToast(toast), timeout);
+            });
+
+            document.querySelectorAll("[data-toast-close]").forEach((button) => {
+                button.addEventListener("click", () => closeToast(button.closest("[data-toast]")));
+            });
+
+            const newDossierModal = document.querySelector("[data-new-dossier-modal]");
+            const setNewDossierModal = (open) => {
+                if (!newDossierModal) return;
+                newDossierModal.classList.toggle("hidden", !open);
+                newDossierModal.classList.toggle("flex", open);
+            };
+
+            document.querySelectorAll("[data-new-dossier-choice]").forEach((button) => {
+                button.addEventListener("click", () => setNewDossierModal(true));
+            });
+
+            document.querySelectorAll("[data-new-dossier-close]").forEach((button) => {
+                button.addEventListener("click", () => setNewDossierModal(false));
+            });
+
+            newDossierModal?.addEventListener("click", (event) => {
+                if (event.target === newDossierModal) {
+                    setNewDossierModal(false);
+                }
+            });
+
             document.addEventListener("keydown", (event) => {
                 if (event.key === "Escape") {
                     root.classList.remove("mg-sidebar-open");
+                    setNewDossierModal(false);
                 }
             });
 

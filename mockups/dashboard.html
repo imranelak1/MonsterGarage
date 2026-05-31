@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tableau de bord — Monster Garage ERP</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <link rel="stylesheet" href="_shared.css">
+  <style>
+    /* Hero */
+    .hero {
+      border-radius: 20px; overflow: hidden;
+      background: radial-gradient(circle at 18% 35%, #1e1e1e 0%, #050505 60%, #000 100%);
+      padding: 32px; color: #fff; position: relative; margin-bottom: 20px;
+    }
+    .hero-noise {
+      position: absolute; inset: 0; pointer-events: none; opacity: 0.04;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+    .hero-grid { display: grid; grid-template-columns: 1fr 340px; gap: 32px; align-items: center; position: relative; z-index: 1; }
+    .hero-tag { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05); font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.24em; color: rgba(255,255,255,0.6); margin-bottom: 18px; }
+    .hero-tag-dot { width: 7px; height: 7px; border-radius: 50%; background: #FFD700; }
+    .hero-title { font-size: 44px; font-weight: 800; line-height: 1; letter-spacing: -0.02em; color: #fff; }
+    .hero-title span { color: #FFD700; }
+    .hero-desc { margin-top: 16px; font-size: 14px; line-height: 1.7; color: rgba(255,255,255,0.5); max-width: 460px; }
+    .hero-ctas { margin-top: 24px; display: flex; gap: 12px; }
+    .hero-btn-primary {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 0 20px; height: 42px; border-radius: 12px;
+      background: #FFD700; color: #000; font-size: 12px; font-weight: 800;
+      text-transform: uppercase; letter-spacing: 0.1em;
+      text-decoration: none; border: none; cursor: pointer;
+    }
+    .hero-btn-secondary {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 0 20px; height: 42px; border-radius: 12px;
+      background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12);
+      color: rgba(255,255,255,0.7); font-size: 12px; font-weight: 700;
+      text-decoration: none; cursor: pointer;
+    }
+
+    /* Dossier card in hero */
+    .hero-dossier {
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 18px; padding: 20px; backdrop-filter: blur(10px);
+    }
+    .hero-dossier-header { display: flex; align-items: center; gap: 14px; }
+    .hero-dossier-icon {
+      width: 48px; height: 48px; border-radius: 14px;
+      background: #FFD700; display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; box-shadow: 0 8px 24px rgba(255,215,0,0.25);
+    }
+    .hero-dossier-num { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.22em; color: rgba(255,255,255,0.35); }
+    .hero-dossier-title { font-size: 18px; font-weight: 800; color: #fff; margin-top: 2px; }
+
+    /* KPI grid */
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
+    .kpi-card { background: #fff; border: 1px solid rgba(0,0,0,0.07); border-radius: 14px; padding: 18px 20px; }
+    .kpi-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-bottom: 14px; }
+    .kpi-label { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.2em; color: #64748B; }
+    .kpi-value { font-size: 26px; font-weight: 800; color: #0F172A; letter-spacing: -0.03em; margin-top: 6px; line-height: 1; }
+    .kpi-trend { font-size: 11px; font-weight: 600; margin-top: 8px; display: flex; align-items: center; gap: 4px; }
+    .kpi-trend.up   { color: #059669; }
+    .kpi-trend.warn { color: #D97706; }
+    .kpi-trend.neutral { color: #64748B; }
+
+    /* Kanban */
+    .kanban { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+    .kanban-col-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding-bottom: 12px; border-bottom: 2px solid; margin-bottom: 14px;
+    }
+    .kanban-col-title { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.2em; }
+    .kanban-col-sub   { font-size: 11px; font-weight: 600; color: #64748B; margin-top: 2px; }
+    .kanban-count { padding: 2px 10px; border-radius: 8px; font-size: 12px; font-weight: 800; }
+
+    .flow-card {
+      background: #fff; border: 1px solid rgba(0,0,0,0.07); border-radius: 16px; padding: 16px;
+      margin-bottom: 12px; text-decoration: none; color: inherit; display: block;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .flow-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.08); }
+    .flow-card.in-progress { border-left: 4px solid #FFD700; }
+    .flow-card.completed   { border-left: 4px solid #059669; }
+
+    .flow-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+    .flow-card-num { font-size: 11px; font-weight: 800; color: #94A3B8; font-family: monospace; }
+    .flow-vehicle  { font-size: 16px; font-weight: 800; color: #0F172A; line-height: 1.2; }
+    .flow-client   { font-size: 12px; font-weight: 600; color: #64748B; margin-top: 3px; }
+
+    .flow-card-footer {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(0,0,0,0.06);
+    }
+    .flow-user-avatar { width: 28px; height: 28px; border-radius: 8px; background: #F1F5F9; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 800; color: #64748B; }
+    .flow-user-name { font-size: 11px; font-weight: 600; color: #64748B; margin-left: 8px; }
+    .flow-date { font-size: 10px; font-weight: 800; background: #FFF7ED; color: #C2410C; padding: 3px 8px; border-radius: 6px; }
+
+    .empty-col {
+      border: 2px dashed rgba(0,0,0,0.1); border-radius: 16px;
+      padding: 32px; text-align: center; cursor: pointer;
+    }
+    .empty-col-icon { width: 44px; height: 44px; border-radius: 50%; background: #F1F5F9; display: flex; align-items: center; justify-content: center; margin: 0 auto 12px; color: #CBD5E1; }
+    .empty-col-text { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.2em; color: #CBD5E1; }
+  </style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- ── SIDEBAR ───────────────────────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="sidebar-logo-icon">
+        <i data-lucide="car" style="width:20px;height:20px;color:#000"></i>
+      </div>
+      <div>
+        <p class="sidebar-brand-name">Monster Garage</p>
+        <p class="sidebar-brand-sub">Marrakech · v4.0.9</p>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div>
+        <p class="nav-section-label">Principal</p>
+        <div class="nav-group">
+          <a href="dashboard.html" class="nav-link active">
+            <span class="nav-icon"><i data-lucide="layout-dashboard" style="width:14px;height:14px"></i></span>
+            Tableau de bord
+          </a>
+          <a href="dossiers.html" class="nav-link">
+            <span class="nav-icon"><i data-lucide="wrench" style="width:14px;height:14px"></i></span>
+            Atelier & opérations
+          </a>
+          <a href="#" class="nav-link">
+            <span class="nav-icon"><i data-lucide="file-text" style="width:14px;height:14px"></i></span>
+            Module SNTL
+          </a>
+          <a href="#" class="nav-link">
+            <span class="nav-icon"><i data-lucide="clipboard-list" style="width:14px;height:14px"></i></span>
+            Devis
+          </a>
+          <a href="facture.html" class="nav-link">
+            <span class="nav-icon"><i data-lucide="receipt" style="width:14px;height:14px"></i></span>
+            Facturation
+          </a>
+        </div>
+      </div>
+      <div>
+        <p class="nav-section-label">Gestion</p>
+        <div class="nav-group">
+          <a href="clients.html" class="nav-link">
+            <span class="nav-icon"><i data-lucide="users" style="width:14px;height:14px"></i></span>
+            Clients & CRM
+          </a>
+          <a href="#" class="nav-link">
+            <span class="nav-icon"><i data-lucide="car" style="width:14px;height:14px"></i></span>
+            Véhicules
+          </a>
+          <a href="#" class="nav-link">
+            <span class="nav-icon"><i data-lucide="package" style="width:14px;height:14px"></i></span>
+            Approvisionnements
+          </a>
+        </div>
+      </div>
+      <div>
+        <p class="nav-section-label">Pilotage</p>
+        <div class="nav-group">
+          <a href="rh.html" class="nav-link">
+            <span class="nav-icon"><i data-lucide="user-cog" style="width:14px;height:14px"></i></span>
+            Ressources Humaines
+          </a>
+          <a href="#" class="nav-link">
+            <span class="nav-icon"><i data-lucide="bar-chart-2" style="width:14px;height:14px"></i></span>
+            Rapports
+          </a>
+          <a href="#" class="nav-link">
+            <span class="nav-icon"><i data-lucide="settings" style="width:14px;height:14px"></i></span>
+            Paramètres
+          </a>
+        </div>
+      </div>
+    </nav>
+
+    <div class="sidebar-user">
+      <div class="sidebar-user-avatar">AD</div>
+      <div style="flex:1;min-width:0">
+        <p class="sidebar-user-name">Administrateur</p>
+        <p class="sidebar-user-role">Accès complet</p>
+      </div>
+      <button style="color:rgba(255,255,255,0.3);background:none;border:none;cursor:pointer;padding:4px">
+        <i data-lucide="log-out" style="width:15px;height:15px"></i>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ── MAIN ──────────────────────────────────────────────────────── -->
+  <div class="main">
+
+    <!-- Topbar -->
+    <header class="topbar">
+      <div style="display:flex;align-items:center;gap:20px">
+        <div class="topbar-live">
+          <div class="topbar-live-dot"></div>
+          Live Workshop Control
+        </div>
+        <div>
+          <p class="topbar-site-label">Site actuel</p>
+          <p class="topbar-site-name">Monster Garage <span style="font-weight:500;color:#94A3B8">— Marrakech</span></p>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <button class="btn btn-primary" style="font-size:11px;letter-spacing:0.06em">
+          <i data-lucide="plus" style="width:14px;height:14px"></i> Nouveau dossier
+        </button>
+        <button class="btn btn-icon" style="position:relative">
+          <i data-lucide="bell" style="width:16px;height:16px"></i>
+          <span style="position:absolute;top:7px;right:7px;width:7px;height:7px;border-radius:50%;background:#EF4444;border:2px solid #fff"></span>
+        </button>
+        <div class="topbar-avatar">
+          <div class="topbar-avatar-img">AD</div>
+          <div>
+            <p class="topbar-avatar-name">Administrateur</p>
+            <p class="topbar-avatar-role">Admin</p>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Content -->
+    <main class="content">
+
+      <!-- Hero -->
+      <div class="hero">
+        <div class="hero-noise"></div>
+        <div style="position:absolute;right:-20px;top:10px;font-size:130px;font-weight:900;color:rgba(255,255,255,0.03);pointer-events:none;line-height:1;letter-spacing:-0.05em">MG</div>
+        <div class="hero-grid">
+          <div>
+            <div class="hero-tag"><div class="hero-tag-dot"></div> Terminal d'entrée atelier</div>
+            <h1 class="hero-title">Démarrer un<br>nouveau<br><span>dossier atelier</span></h1>
+            <p class="hero-desc">Initialisez une prise en charge véhicule, créez le client et la voiture, puis démarrez le devis initial. Le flux reste contrôlé.</p>
+            <div class="hero-ctas">
+              <button class="hero-btn-primary">
+                <i data-lucide="plus-circle" style="width:16px;height:16px"></i> Nouveau dossier
+              </button>
+              <a href="dossiers.html" class="hero-btn-secondary">
+                Historique <i data-lucide="arrow-right" style="width:14px;height:14px"></i>
+              </a>
+            </div>
+          </div>
+
+          <div class="hero-dossier">
+            <div class="hero-dossier-header">
+              <div class="hero-dossier-icon">
+                <i data-lucide="wrench" style="width:22px;height:22px;color:#000"></i>
+              </div>
+              <div>
+                <p class="hero-dossier-num">Dernière entrée</p>
+                <p class="hero-dossier-title">AT-2024-089</p>
+              </div>
+            </div>
+            <div style="margin-top:18px">
+              <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:10px">
+                <div>
+                  <p style="font-size:15px;font-weight:800;color:#fff">Mercedes GLC 300</p>
+                  <p style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:2px">SARL Al Baraka Transport</p>
+                </div>
+                <span style="font-size:14px;font-weight:800;color:#FFD700">72%</span>
+              </div>
+              <div style="height:6px;border-radius:999px;background:rgba(255,255,255,0.1);overflow:hidden">
+                <div style="width:72%;height:100%;border-radius:999px;background:#FFD700;box-shadow:0 0 14px rgba(255,215,0,0.4)"></div>
+              </div>
+            </div>
+            <a href="dossiers.html" style="display:flex;align-items:center;justify-content:space-between;margin-top:16px;padding:14px;border-radius:14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);text-decoration:none;transition:background 0.15s" onmouseover="this.style.background='rgba(255,255,255,0.09)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">
+              <div>
+                <p style="font-size:13px;font-weight:800;color:#fff">En réparation</p>
+                <p style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:3px">Révision complète + remplacement plaquettes</p>
+              </div>
+              <div style="width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center">
+                <i data-lucide="arrow-right" style="width:14px;height:14px;color:#FFD700"></i>
+              </div>
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- KPI Grid -->
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-icon" style="background:rgba(255,215,0,0.12)">
+            <i data-lucide="trending-up" style="width:18px;height:18px;color:#856600"></i>
+          </div>
+          <p class="kpi-label">CA du mois</p>
+          <p class="kpi-value">145 800 <span style="font-size:16px;color:#94A3B8">MAD</span></p>
+          <p class="kpi-trend up"><i data-lucide="arrow-up-right" style="width:13px;height:13px"></i> +18% vs mois dernier</p>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon" style="background:rgba(37,99,235,0.1)">
+            <i data-lucide="folder-open" style="width:18px;height:18px;color:#1e40af"></i>
+          </div>
+          <p class="kpi-label">Dossiers actifs</p>
+          <p class="kpi-value">12</p>
+          <p class="kpi-trend warn"><i data-lucide="clock" style="width:13px;height:13px"></i> 3 en attente d'accord</p>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon" style="background:rgba(5,150,105,0.1)">
+            <i data-lucide="users" style="width:18px;height:18px;color:#065f46"></i>
+          </div>
+          <p class="kpi-label">Clients actifs</p>
+          <p class="kpi-value">247</p>
+          <p class="kpi-trend neutral"><i data-lucide="user-plus" style="width:13px;height:13px"></i> +4 ce mois</p>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon" style="background:rgba(220,38,38,0.1)">
+            <i data-lucide="receipt" style="width:18px;height:18px;color:#991b1b"></i>
+          </div>
+          <p class="kpi-label">Factures en attente</p>
+          <p class="kpi-value">8</p>
+          <p class="kpi-trend warn"><i data-lucide="alert-triangle" style="width:13px;height:13px"></i> 32 400 MAD restants</p>
+        </div>
+      </div>
+
+      <!-- Kanban section header -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="width:38px;height:38px;border-radius:11px;background:#0A0A0A;display:flex;align-items:center;justify-content:center">
+            <i data-lucide="activity" style="width:18px;height:18px;color:#FFD700"></i>
+          </div>
+          <div>
+            <h2 style="font-size:18px;font-weight:800;letter-spacing:-0.01em">Flux atelier en temps réel</h2>
+            <p style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.16em;color:#94A3B8;margin-top:2px">Surveillance active des dossiers</p>
+          </div>
+        </div>
+        <a href="dossiers.html" class="btn" style="font-size:11px;font-weight:800;letter-spacing:0.06em">
+          Tous les dossiers <i data-lucide="arrow-right" style="width:13px;height:13px"></i>
+        </a>
+      </div>
+
+      <!-- Kanban columns -->
+      <div class="kanban">
+
+        <!-- Col 1: En attente -->
+        <div>
+          <div class="kanban-col-header" style="border-color:#E2E8F0;color:#0F172A">
+            <div>
+              <p class="kanban-col-title">En attente</p>
+              <p class="kanban-col-sub">Devis / accord client</p>
+            </div>
+            <span class="kanban-count" style="background:#F1F5F9;color:#475569">4</span>
+          </div>
+
+          <a href="#" class="flow-card">
+            <div class="flow-card-top">
+              <span class="badge badge-yellow"><i data-lucide="clock" style="width:9px;height:9px"></i> En attente devis</span>
+              <span class="flow-card-num">#AT-2024-086</span>
+            </div>
+            <p class="flow-vehicle">BMW 320i — 2022</p>
+            <p class="flow-client">M. Rachid Benali</p>
+            <div class="flow-card-footer">
+              <div style="display:flex;align-items:center">
+                <div class="flow-user-avatar">YA</div>
+                <span class="flow-user-name">Yassine A.</span>
+              </div>
+              <span class="flow-date">28/05 09:14</span>
+            </div>
+          </a>
+
+          <a href="#" class="flow-card">
+            <div class="flow-card-top">
+              <span class="badge badge-orange"><i data-lucide="file-question" style="width:9px;height:9px"></i> Attente accord</span>
+              <span class="flow-card-num">#AT-2024-085</span>
+            </div>
+            <p class="flow-vehicle">Toyota Hilux — 2021</p>
+            <p class="flow-client">Direction Régionale SNTL</p>
+            <div class="flow-card-footer">
+              <div style="display:flex;align-items:center">
+                <div class="flow-user-avatar">KA</div>
+                <span class="flow-user-name">Karim A.</span>
+              </div>
+              <span class="flow-date">27/05 16:40</span>
+            </div>
+          </a>
+
+          <div class="empty-col">
+            <div class="empty-col-icon">
+              <i data-lucide="plus" style="width:20px;height:20px"></i>
+            </div>
+            <p class="empty-col-text">Zone disponible</p>
+          </div>
+        </div>
+
+        <!-- Col 2: En réparation -->
+        <div>
+          <div class="kanban-col-header" style="border-color:#FFD700;color:#0F172A">
+            <div>
+              <p class="kanban-col-title">En réparation</p>
+              <p class="kanban-col-sub">Travaux en cours</p>
+            </div>
+            <span class="kanban-count" style="background:#FFD700;color:#000">5</span>
+          </div>
+
+          <a href="#" class="flow-card in-progress">
+            <div class="flow-card-top">
+              <span class="badge badge-blue"><i data-lucide="wrench" style="width:9px;height:9px"></i> En réparation</span>
+              <span class="flow-card-num">#AT-2024-089</span>
+            </div>
+            <p class="flow-vehicle">Mercedes GLC 300</p>
+            <p class="flow-client">SARL Al Baraka Transport</p>
+            <div style="margin-top:12px">
+              <div style="display:flex;justify-content:space-between;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.12em;color:#94A3B8;margin-bottom:6px">
+                <span>Progression</span><span style="color:#856600">72%</span>
+              </div>
+              <div class="progress-bar"><div class="progress-fill" style="width:72%"></div></div>
+            </div>
+            <div class="flow-card-footer">
+              <div style="display:flex;align-items:center">
+                <div class="flow-user-avatar">MA</div>
+                <span class="flow-user-name">Mohamed A.</span>
+              </div>
+              <span class="flow-date">29/05 08:30</span>
+            </div>
+          </a>
+
+          <a href="#" class="flow-card in-progress">
+            <div class="flow-card-top">
+              <span class="badge badge-blue"><i data-lucide="wrench" style="width:9px;height:9px"></i> En réparation</span>
+              <span class="flow-card-num">#AT-2024-088</span>
+            </div>
+            <p class="flow-vehicle">Renault Kangoo — 2019</p>
+            <p class="flow-client">M. Hassan Zerhouni</p>
+            <div style="margin-top:12px">
+              <div style="display:flex;justify-content:space-between;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.12em;color:#94A3B8;margin-bottom:6px">
+                <span>Progression</span><span style="color:#856600">40%</span>
+              </div>
+              <div class="progress-bar"><div class="progress-fill" style="width:40%"></div></div>
+            </div>
+            <div class="flow-card-footer">
+              <div style="display:flex;align-items:center">
+                <div class="flow-user-avatar">AB</div>
+                <span class="flow-user-name">Amine B.</span>
+              </div>
+              <span class="flow-date">28/05 14:20</span>
+            </div>
+          </a>
+        </div>
+
+        <!-- Col 3: Terminés -->
+        <div>
+          <div class="kanban-col-header" style="border-color:#10B981;color:#0F172A">
+            <div>
+              <p class="kanban-col-title">Terminés</p>
+              <p class="kanban-col-sub">Prêts à livrer</p>
+            </div>
+            <span class="kanban-count" style="background:#ECFDF5;color:#065f46">3</span>
+          </div>
+
+          <a href="#" class="flow-card completed">
+            <div class="flow-card-top">
+              <span class="badge badge-green"><i data-lucide="check-circle" style="width:9px;height:9px"></i> Terminé</span>
+              <span class="flow-card-num">#AT-2024-083</span>
+            </div>
+            <p class="flow-vehicle">Peugeot 3008 — 2020</p>
+            <p class="flow-client">Mme. Fatima Chraibi</p>
+            <div style="margin-top:12px">
+              <div style="display:flex;justify-content:space-between;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.12em;color:#94A3B8;margin-bottom:6px">
+                <span>Progression</span><span style="color:#059669">100%</span>
+              </div>
+              <div class="progress-bar"><div class="progress-fill green" style="width:100%"></div></div>
+            </div>
+            <div class="flow-card-footer">
+              <div style="display:flex;align-items:center">
+                <div class="flow-user-avatar">YA</div>
+                <span class="flow-user-name">Yassine A.</span>
+              </div>
+              <span class="flow-date">29/05 07:55</span>
+            </div>
+          </a>
+
+          <a href="#" class="flow-card completed">
+            <div class="flow-card-top">
+              <span class="badge badge-green"><i data-lucide="check-circle" style="width:9px;height:9px"></i> Terminé</span>
+              <span class="flow-card-num">#AT-2024-081</span>
+            </div>
+            <p class="flow-vehicle">Dacia Duster — 2023</p>
+            <p class="flow-client">Commune d'Ait Melloul</p>
+            <div class="flow-card-footer">
+              <div style="display:flex;align-items:center">
+                <div class="flow-user-avatar">KA</div>
+                <span class="flow-user-name">Karim A.</span>
+              </div>
+              <span class="flow-date">28/05 18:00</span>
+            </div>
+          </a>
+        </div>
+
+      </div>
+
+    </main>
+  </div>
+
+</div>
+<script>lucide.createIcons()</script>
+</body>
+</html>

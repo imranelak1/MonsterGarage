@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 import re
 import textwrap
 
-from app.models import DevisReparation, FactureReparation, ParametreSysteme
+from app.models import DevisReparation, FactureReparation
+from app.services.calculs_facturation import calculer_commission_sntl, param_percent
 from app.services.parametres import obtenir_entreprise
 
 
@@ -108,9 +109,7 @@ def _build_sntl_document_pdf(
     total_ht = (article_total + labor_total).quantize(Decimal("0.01"))
     montant_tva = (total_ht * tva).quantize(Decimal("0.01"))
     montant_ttc = (total_ht + montant_tva).quantize(Decimal("0.01"))
-    commission_sntl = (total_ht * commission).quantize(Decimal("0.01"))
-    tva_commission = (commission_sntl * tva).quantize(Decimal("0.01"))
-    net_a_regler = (montant_ttc - commission_sntl - tva_commission).quantize(Decimal("0.01"))
+    commission_sntl = calculer_commission_sntl(total_ht, montant_ttc)
 
     totals = [
         ("Montant Total article HT", article_total, "wide"),
@@ -122,9 +121,9 @@ def _build_sntl_document_pdf(
     if include_commission:
         totals.extend(
             [
-                (f"Commission SNTL (1x{int(commission * 100)}%) (4)", commission_sntl, "wide"),
-                (f"TVA {int(tva * 100)}% sur la comission (4x{int(tva * 100)}%) (5)", tva_commission, "wide"),
-                ("Montant Net à régler (3-4-5)", net_a_regler, "wide"),
+                (f"Commission SNTL (1x{int(commission * 100)}%) (4)", commission_sntl.commission_ht, "wide"),
+                (f"TVA {int(tva * 100)}% sur la comission (4x{int(tva * 100)}%) (5)", commission_sntl.tva_commission, "wide"),
+                ("Montant Net à régler (3-4-5)", commission_sntl.net_a_regler, "wide"),
             ]
         )
 
@@ -615,13 +614,7 @@ def _arrete(amount) -> str:
 
 
 def _param_percent(cle: str, default: Decimal) -> Decimal:
-    param = ParametreSysteme.query.filter_by(cle=cle).first()
-    raw = param.valeur if param else default
-    try:
-        value = Decimal(str(raw))
-    except (InvalidOperation, ValueError):
-        value = default
-    return (value / Decimal("100")).quantize(Decimal("0.0001"))
+    return param_percent(cle, default)
 
 
 def _split_sntl_lines(lines) -> tuple[list, Decimal]:

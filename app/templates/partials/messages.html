@@ -1,18 +1,44 @@
 {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
-        <div class="space-y-3">
+        <div class="pointer-events-none fixed right-4 top-5 z-[9999] grid w-[min(26rem,calc(100vw-2rem))] gap-3" data-toast-stack aria-live="polite" aria-atomic="false">
             {% for category, message in messages %}
-                <p class="rounded-md border px-4 py-3 text-sm font-medium
-                    {% if category == 'success' %}
-                        border-emerald-200 bg-emerald-50 text-emerald-900
-                    {% elif category == 'danger' %}
-                        border-red-200 bg-red-50 text-red-900
-                    {% elif category == 'warning' %}
-                        border-amber-200 bg-amber-50 text-amber-900
-                    {% else %}
-                        border-blue-200 bg-blue-50 text-blue-900
-                    {% endif %}
-                ">{{ message }}</p>
+                {% set tone = category if category in ['success', 'danger', 'warning', 'info'] else 'info' %}
+                <section class="pointer-events-auto overflow-hidden rounded-xl border bg-white shadow-2xl shadow-slate-900/12 ring-1 ring-black/5 transition duration-200 ease-out data-[closing=true]:translate-x-4 data-[closing=true]:opacity-0
+                    {% if tone == 'success' %}border-emerald-200
+                    {% elif tone == 'danger' %}border-red-200
+                    {% elif tone == 'warning' %}border-amber-200
+                    {% else %}border-blue-200{% endif %}"
+                    data-toast
+                    data-toast-tone="{{ tone }}"
+                    role="{% if tone == 'danger' %}alert{% else %}status{% endif %}">
+                    <div class="flex items-start gap-3 p-4">
+                        <div class="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-sm font-black
+                            {% if tone == 'success' %}bg-emerald-100 text-emerald-700
+                            {% elif tone == 'danger' %}bg-red-100 text-red-700
+                            {% elif tone == 'warning' %}bg-amber-100 text-amber-700
+                            {% else %}bg-blue-100 text-blue-700{% endif %}">
+                            {% if tone == 'success' %}OK{% elif tone == 'danger' %}!{% elif tone == 'warning' %}AT{% else %}IN{% endif %}
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <p class="text-[10px] font-black uppercase tracking-[0.18em]
+                                {% if tone == 'success' %}text-emerald-700
+                                {% elif tone == 'danger' %}text-red-700
+                                {% elif tone == 'warning' %}text-amber-700
+                                {% else %}text-blue-700{% endif %}">
+                                {% if tone == 'success' %}Succes{% elif tone == 'danger' %}Action requise{% elif tone == 'warning' %}Attention{% else %}Information{% endif %}
+                            </p>
+                            <p class="mt-1 text-sm font-semibold leading-5 text-slate-800">{{ message }}</p>
+                        </div>
+                        <button class="grid h-8 w-8 shrink-0 place-items-center rounded-md text-lg font-black leading-none text-slate-400 transition hover:bg-slate-100 hover:text-slate-700" type="button" data-toast-close aria-label="Fermer la notification">x</button>
+                    </div>
+                    <div class="h-1 bg-slate-100">
+                        <div class="h-full origin-left animate-[toast-progress_5.5s_linear_forwards]
+                            {% if tone == 'success' %}bg-emerald-500
+                            {% elif tone == 'danger' %}bg-red-500
+                            {% elif tone == 'warning' %}bg-amber-500
+                            {% else %}bg-blue-500{% endif %}"></div>
+                    </div>
+                </section>
             {% endfor %}
         </div>
     {% endif %}

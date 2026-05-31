@@ -38,21 +38,6 @@
                 <select class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="client_type">
                     <option value="particulier">Particulier</option>
                     <option value="administration">Administration</option>
-                    <option value="sntl">Administration SNTL</option>
-                </select>
-            </label>
-            <label class="hidden grid gap-2 text-sm font-bold text-slate-800" data-sntl-preset>
-                Client SNTL / OR
-                <select class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="client_sntl_preset">
-                    {% for key, preset in sntl_presets.items() %}
-                        <option value="{{ key }}"
-                                data-code="{{ preset.code }}"
-                                data-nom="{{ preset.nom }}"
-                                data-or="{{ preset.or_numero }}">
-                            {{ preset.code }} - {{ preset.nom }} / OR {{ preset.or_numero }}
-                        </option>
-                    {% endfor %}
-                    <option value="custom">Nouveau client SNTL</option>
                 </select>
             </label>
             <label class="grid gap-2 text-sm font-bold text-slate-800">
@@ -62,10 +47,6 @@
             <label class="grid gap-2 text-sm font-bold text-slate-800">
                 Email
                 <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" type="email" name="client_email">
-            </label>
-            <label class="hidden grid gap-2 text-sm font-bold text-slate-800" data-sntl-ice>
-                ICE client SNTL
-                <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="client_ice" placeholder="ICE de l'administration">
             </label>
             <label class="grid gap-2 text-sm font-bold text-slate-800">
                 Ville
@@ -216,13 +197,7 @@
 
         const clientSelect = document.querySelector('select[name="client_id"]');
         const clientTypeSelect = document.querySelector('select[name="client_type"]');
-        const sntlPresetBlock = document.querySelector("[data-sntl-preset]");
-        const sntlIceBlock = document.querySelector("[data-sntl-ice]");
-        const sntlPresetSelect = document.querySelector('select[name="client_sntl_preset"]');
-        const clientCodeInput = document.querySelector('input[name="client_code"]');
-        const clientNameInput = document.querySelector('input[name="client_nom"]');
         const vehiculeSelect = document.querySelector('select[name="vehicule_id"]');
-        const immatriculationTypeSelect = document.querySelector('select[name="vehicule_type_immatriculation"]');
         const vehiculeExistantRadio = document.querySelector('input[name="mode_vehicule"][value="existant"]');
         const vehiculeNouveauRadio = document.querySelector('input[name="mode_vehicule"][value="nouveau"]');
         const vehicleHint = document.querySelector("[data-vehicle-filter-hint]");
@@ -240,31 +215,6 @@
             const typeClient = selectedClientType();
             assuranceBlock?.classList.toggle("hidden", typeClient !== "particulier");
             adminBonBlock?.classList.toggle("hidden", typeClient !== "administration");
-            sntlPresetBlock?.classList.toggle("hidden", checkedValue("mode_client") !== "nouveau" || typeClient !== "sntl");
-            sntlIceBlock?.classList.toggle("hidden", checkedValue("mode_client") !== "nouveau" || typeClient !== "sntl");
-            if (typeClient === "sntl") {
-                applySntlPreset();
-            } else {
-                if (clientCodeInput) clientCodeInput.readOnly = false;
-                if (clientNameInput) clientNameInput.readOnly = false;
-            }
-            if (typeClient === "sntl" && checkedValue("mode_vehicule") === "nouveau" && immatriculationTypeSelect) {
-                immatriculationTypeSelect.value = "administrative";
-            }
-        };
-
-        const applySntlPreset = () => {
-            if (checkedValue("mode_client") !== "nouveau" || clientTypeSelect?.value !== "sntl") return;
-            const selected = sntlPresetSelect?.selectedOptions[0];
-            const isCustom = !selected || selected.value === "custom";
-            if (clientCodeInput) {
-                clientCodeInput.readOnly = !isCustom;
-                clientCodeInput.value = isCustom ? clientCodeInput.value : selected.dataset.code || "";
-            }
-            if (clientNameInput) {
-                clientNameInput.readOnly = !isCustom;
-                clientNameInput.value = isCustom ? clientNameInput.value : selected.dataset.nom || "";
-            }
         };
 
         const updateVehicleChoices = () => {
@@ -334,7 +284,6 @@
         });
         clientSelect?.addEventListener("change", updateVehicleChoices);
         clientTypeSelect?.addEventListener("change", updateClientDependentFields);
-        sntlPresetSelect?.addEventListener("change", applySntlPreset);
         updateVehicleChoices();
     })();
 </script>

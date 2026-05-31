@@ -6,6 +6,7 @@ from flask_login import current_user
 
 from app.extensions import db
 from app.models import DevisReparation, DossierReparation, JournalAction, LigneDevisReparation
+from app.services.workflow import transition_dossier_autorisee
 
 TAUX_TVA_DEFAUT = Decimal("0.20")
 MODES_ACCORD_AUTORISES = {"telephone", "signature", "presentiel", "systeme"}
@@ -55,6 +56,12 @@ def journaliser(dossier: DossierReparation, action: str, details: str = "") -> N
     )
 
 
+def changer_statut_dossier(dossier: DossierReparation, nouveau_statut: str) -> None:
+    if not transition_dossier_autorisee(dossier.statut, nouveau_statut):
+        raise RegleMetierErreur(f"Transition dossier invalide: {dossier.statut} -> {nouveau_statut}.")
+    dossier.statut = nouveau_statut
+
+
 def creer_devis(dossier: DossierReparation, objet: str, lignes_formulaire: list[dict], notes: str = "") -> DevisReparation:
     if any(devis.statut == "pending" for devis in dossier.devis):
         raise RegleMetierErreur("Un devis est déjà en attente d'accord pour ce dossier.")
@@ -96,7 +103,7 @@ def creer_devis(dossier: DossierReparation, objet: str, lignes_formulaire: list[
             )
         )
 
-    dossier.statut = "pending_approval"
+    changer_statut_dossier(dossier, "pending_approval")
     journaliser(dossier, "devis_cree", f"Devis v{version} créé pour {montant_ttc} MAD TTC.")
     return devis
 
@@ -119,7 +126,7 @@ def approuver_devis(devis: DevisReparation, mode_accord: str, accord_assurance: 
     devis.accord_assurance = accord_assurance
     devis.approuve_par_id = current_user.id
     devis.approuve_le = db.func.now()
-    dossier.statut = "in_progress"
+    changer_statut_dossier(dossier, "in_progress")
     journaliser(dossier, "devis_approuve", f"Devis v{devis.version} approuvé via {mode_accord}.")
 
 
@@ -133,7 +140,7 @@ def refuser_devis(devis: DevisReparation, motif: str = "") -> None:
 
     devis.statut = "rejected"
     devis.motif_refus = motif.strip()
-    dossier.statut = "pending_devis"
+    changer_statut_dossier(dossier, "pending_devis")
     journaliser(dossier, "devis_refuse", f"Devis v{devis.version} refusé. Créer une version corrigée ou annuler le dossier.")
 
 
@@ -141,7 +148,7 @@ def mettre_en_pause(dossier: DossierReparation, raison: str) -> None:
     if dossier.statut != "in_progress":
         raise RegleMetierErreur("Seul un dossier en réparation peut être mis en pause.")
 
-    dossier.statut = "paused_pending_approval"
+    changer_statut_dossier(dossier, "paused_pending_approval")
     journaliser(dossier, "pause_accord_requis", raison.strip() or "Travaux supplémentaires détectés.")
 
 
@@ -152,7 +159,7 @@ def terminer_dossier(dossier: DossierReparation) -> None:
     if not dossier.dernier_devis_approuve:
         raise RegleMetierErreur("Impossible de terminer sans devis approuvé.")
 
-    dossier.statut = "completed"
+    changer_statut_dossier(dossier, "completed")
     journaliser(dossier, "dossier_termine", "Réparation terminée. Facture à générer depuis le dernier devis approuvé.")
 
 
@@ -160,7 +167,7 @@ def annuler_dossier(dossier: DossierReparation, motif: str) -> None:
     if dossier.statut in {"completed", "cancelled_billable"}:
         raise RegleMetierErreur("Un dossier termine ou deja facturable ne peut pas etre annule simplement.")
 
-    dossier.statut = "cancelled"
+    changer_statut_dossier(dossier, "cancelled")
     journaliser(dossier, "dossier_annule", motif.strip())
 
 
@@ -174,7 +181,7 @@ def annuler_dossier_facturable(dossier: DossierReparation, motif: str) -> None:
     if not dossier.dernier_devis_approuve:
         raise RegleMetierErreur("Creez et approuvez un devis limite aux travaux effectues avant de facturer l'annulation.")
 
-    dossier.statut = "cancelled_billable"
+    changer_statut_dossier(dossier, "cancelled_billable")
     journaliser(
         dossier,
         "dossier_annule_facturable",
@@ -186,7 +193,7 @@ def rouvrir_garantie(dossier: DossierReparation, motif: str) -> None:
     if dossier.statut != "completed" or not dossier.facture:
         raise RegleMetierErreur("La reprise garantie concerne uniquement un dossier deja facture.")
 
-    dossier.statut = "in_progress"
+    changer_statut_dossier(dossier, "in_progress")
     journaliser(
         dossier,
         "reprise_garantie",

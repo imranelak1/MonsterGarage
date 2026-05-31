@@ -31,6 +31,7 @@ from app.models.vehicule import Vehicule
 from app.models.dossier_reparation import DossierReparation, JournalAction
 from app.models.devis_reparation import DevisReparation, LigneDevisReparation
 from app.models.facture_reparation import FactureReparation
+from app.models.chiffre_affaires import EntreeChiffreAffaires
 from app.models.employe import Employe
 from app.models.avance_salaire import AvanceSalaire
 from app.models.salaire import Salaire
@@ -41,6 +42,7 @@ __all__ = [
     "DevisReparation",
     "DossierReparation",
     "Employe",
+    "EntreeChiffreAffaires",
     "Entreprise",
     "FactureReparation",
     "JournalAction",

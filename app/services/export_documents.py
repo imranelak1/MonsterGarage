@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from io import BytesIO
 from pathlib import Path
 import re
@@ -9,7 +9,8 @@ from openpyxl.drawing.image import Image as XLImage
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
-from app.models import Client, DevisReparation, FactureReparation, ParametreSysteme
+from app.models import Client, DevisReparation, FactureReparation
+from app.services.calculs_facturation import calculer_commission_sntl, param_percent
 from app.services.parametres import obtenir_entreprise
 
 
@@ -80,7 +81,101 @@ def exporter_facture_excel(facture: FactureReparation) -> bytes:
 def exporter_releve_client_excel(client: Client, factures: list[FactureReparation]) -> bytes:
     wb = Workbook()
     ws = wb.active
-    ws.title = "SITUATION CLIENT"
+    if client.type == "sntl":
+        ws.title = "RELEVE SNTL"
+        _build_releve_sntl(ws, client, factures)
+        return _save(wb)
+
+    _build_releve_client(ws, client, factures)
+    _build_resume_vehicules(wb, client, factures)
+    return _save(wb)
+
+
+def exporter_situation_clients_excel(clients: list[Client], factures: list[FactureReparation]) -> bytes:
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "SITUATION GLOBALE"
+    _document_setup(ws, widths=[30, 18, 14, 18, 18, 18, 18, 18, 18])
+    _build_header(ws, "SITUATION FINANCIERE CLIENTS", "GLOBAL", date.today())
+
+    headers = [
+        "CLIENT",
+        "TYPE",
+        "NB FACTURES",
+        "MONTANT TTC",
+        "COMMISSION SNTL",
+        "NET A REGLER",
+        "ENCAISSE",
+        "A ENCAISSER",
+        "DERNIERE FACTURE",
+    ]
+    header_row = 9
+    _write_table_header(ws, header_row, headers)
+
+    factures_par_client = {client.id: [] for client in clients}
+    for facture in factures:
+        factures_par_client.setdefault(facture.dossier.client_id, []).append(facture)
+
+    first_data_row = header_row + 1
+    row = first_data_row
+    for client in clients:
+        client_factures = factures_par_client.get(client.id, [])
+        if not client_factures:
+            continue
+
+        total_ttc = sum((Decimal(str(facture.montant_ttc or 0)) for facture in client_factures), Decimal("0.00"))
+        commission = sum((_commission_releve_sntl(facture) for facture in client_factures), Decimal("0.00"))
+        net_a_regler = total_ttc - commission
+        encaisse = sum((Decimal(str(facture.montant_regle or 0)) for facture in client_factures), Decimal("0.00"))
+        reste = max(net_a_regler - encaisse, Decimal("0.00"))
+        derniere_facture = max(client_factures, key=lambda facture: facture.created_at)
+
+        values = [
+            client.nom,
+            client.type_libelle,
+            len(client_factures),
+            _money(total_ttc),
+            _money(commission),
+            _money(net_a_regler),
+            _money(encaisse),
+            _money(reste),
+            _date_value(derniere_facture.created_at),
+        ]
+        for col, value in enumerate(values, 1):
+            cell = ws.cell(row, col, value)
+            cell.border = _border("FFCBD5E1")
+            cell.alignment = _align("center" if col != 1 else "left", wrap=True)
+            if col in {4, 5, 6, 7, 8}:
+                cell.number_format = '#,##0.00 "MAD"'
+            if col == 9:
+                cell.number_format = "dd/mm/yyyy"
+
+        detail_title = f"SNTL - {client.nom}" if client.type == "sntl" else f"SITUATION - {client.nom}"
+        detail_ws = wb.create_sheet(_unique_sheet_title(wb, detail_title))
+        if client.type == "sntl":
+            _build_releve_sntl(detail_ws, client, client_factures)
+        else:
+            _build_releve_client(detail_ws, client, client_factures)
+
+        row += 1
+
+    total_row = max(first_data_row, row) + 1
+    ws.cell(total_row, 2, "TOTAL").font = _font(bold=True, size=12)
+    for col in (3, 4, 5, 6, 7, 8):
+        cell = ws.cell(total_row, col, f"=SUM({get_column_letter(col)}{first_data_row}:{get_column_letter(col)}{total_row - 1})")
+        cell.font = _font(bold=True, size=12)
+        cell.fill = _fill(_AMBRE_PALE)
+        cell.border = _border()
+        if col in {4, 5, 6, 7, 8}:
+            cell.number_format = '#,##0.00 "MAD"'
+
+    _set_print_options(ws)
+    return _save(wb)
+
+
+def _build_releve_client(ws, client: Client, factures: list[FactureReparation]) -> None:
+    if ws.title == "Sheet":
+        ws.title = "SITUATION CLIENT"
     _document_setup(ws, widths=[18, 28, 24, 18, 18, 18, 18, 18])
     _build_header(ws, f"SITUATION {client.nom.upper()}", client.type_libelle.upper(), date.today())
 
@@ -91,12 +186,7 @@ def exporter_releve_client_excel(client: Client, factures: list[FactureReparatio
 
     headers = ["N FACTURE", "VEHICULE", "IMMATRICULATION", "MONTANT FACTURE", "ENCAISSE", "A ENCAISSER", "DATE", "STATUT"]
     header_row = 9
-    for col, value in enumerate(headers, 1):
-        cell = ws.cell(header_row, col, value)
-        cell.fill = _fill(_SLATE_950)
-        cell.font = _font(bold=True, color=_BLANC)
-        cell.alignment = _align("center", wrap=True)
-        cell.border = _border()
+    _write_table_header(ws, header_row, headers)
 
     first_data_row = header_row + 1
     for index, facture in enumerate(factures, first_data_row):
@@ -129,8 +219,57 @@ def exporter_releve_client_excel(client: Client, factures: list[FactureReparatio
         cell.number_format = '#,##0.00 "MAD"'
 
     _set_print_options(ws)
-    _build_resume_vehicules(wb, client, factures)
-    return _save(wb)
+
+
+def _build_releve_sntl(ws, client: Client, factures: list[FactureReparation]) -> None:
+    _document_setup_sntl(ws)
+    _build_sntl_releve_header(ws)
+
+    headers = ["N° Facture", "Date facture", "N° Bon SNTL", "Montant TTC", "Commission SNTL", "Montant à régler"]
+    header_row = 31
+    for col, value in enumerate(headers, 2):
+        cell = ws.cell(header_row, col, value)
+        cell.font = _font(name=_SNTL_FONT, size=12)
+        cell.alignment = _align("center", wrap=True)
+        cell.border = _border()
+
+    first_data_row = header_row + 1
+    for row, facture in enumerate(factures, first_data_row):
+        commission = _commission_releve_sntl(facture)
+        net_a_regler = Decimal(str(facture.montant_ttc or 0)).quantize(Decimal("0.01")) - commission
+        values = [
+            facture.numero,
+            _date_value(facture.created_at),
+            _sntl_bon_number(facture.dossier, client),
+            _money(facture.montant_ttc),
+            _money(commission),
+            _money(net_a_regler),
+        ]
+        for col, value in enumerate(values, 2):
+            cell = ws.cell(row, col, value)
+            cell.border = _border()
+            cell.alignment = _align("center", wrap=True)
+            cell.font = _font(name=_SNTL_FONT, size=12)
+            if col == 3:
+                cell.number_format = "dd/mm/yyyy"
+            if col in {5, 6, 7}:
+                cell.number_format = '#,##0.00'
+
+    total_row = max(first_data_row, first_data_row + len(factures)) + 1
+    ws.cell(total_row, 2, "Total")
+    ws.cell(total_row, 2).font = _font(name=_SNTL_FONT, bold=True, size=12)
+    for col in (5, 6, 7):
+        cell = ws.cell(total_row, col, f"=SUM({get_column_letter(col)}{first_data_row}:{get_column_letter(col)}{total_row - 1})")
+        cell.font = _font(name=_SNTL_FONT, bold=True, size=12)
+        cell.border = _border()
+        cell.number_format = '#,##0.00'
+        cell.alignment = _align("right")
+
+    signature_row = total_row + 3
+    ws.cell(signature_row, 5, "Cachet et Signature")
+    ws.cell(signature_row, 5).font = _font(name=_SNTL_FONT, size=12)
+    ws.cell(signature_row, 5).alignment = _align()
+    ws.print_area = f"A1:G{signature_row}"
 
 
 def nom_fichier_devis(devis: DevisReparation) -> str:
@@ -330,9 +469,7 @@ def _build_sntl_official_document(
     total_ht = (article_total + labor_total).quantize(Decimal("0.01"))
     montant_tva = (total_ht * tva).quantize(Decimal("0.01"))
     montant_ttc = (total_ht + montant_tva).quantize(Decimal("0.01"))
-    commission_sntl = (total_ht * commission).quantize(Decimal("0.01"))
-    tva_commission = (commission_sntl * tva).quantize(Decimal("0.01"))
-    net_a_regler = (montant_ttc - commission_sntl - tva_commission).quantize(Decimal("0.01"))
+    commission_sntl = calculer_commission_sntl(total_ht, montant_ttc)
 
     _sntl_total_row(ws, totals_start, "Montant Total article HT", article_total)
     _sntl_total_row(ws, totals_start + 1, "Main d'œuvre*", labor_total, label_end_col=4)
@@ -340,9 +477,9 @@ def _build_sntl_official_document(
     _sntl_total_row(ws, totals_start + 3, f"TVA {int(tva * 100)}% (2)", montant_tva, rate=tva)
     _sntl_total_row(ws, totals_start + 4, "Montant Total TTC (1+2) (3)", montant_ttc)
     if include_commission:
-        _sntl_total_row(ws, totals_start + 5, f"Commission SNTL (1x{int(commission * 100)}%) (4)", commission_sntl, rate=commission)
-        _sntl_total_row(ws, totals_start + 6, f"TVA {int(tva * 100)}% sur la comission (4x{int(tva * 100)}%) (5)", tva_commission, rate=tva)
-        _sntl_total_row(ws, totals_start + 7, "Montant Net à régler (3-4-5)", net_a_regler, bold_value=True)
+        _sntl_total_row(ws, totals_start + 5, f"Commission SNTL (1x{int(commission * 100)}%) (4)", commission_sntl.commission_ht, rate=commission)
+        _sntl_total_row(ws, totals_start + 6, f"TVA {int(tva * 100)}% sur la comission (4x{int(tva * 100)}%) (5)", commission_sntl.tva_commission, rate=tva)
+        _sntl_total_row(ws, totals_start + 7, "Montant Net à régler (3-4-5)", commission_sntl.net_a_regler, bold_value=True)
 
     phrase_row = totals_start + (9 if include_commission else 7)
     phrase_subject = "la présente facture" if "FACTURE" in titre.upper() else "le présent devis"
@@ -523,9 +660,7 @@ def _totals_block(
     montant_ht = Decimal(str(montant_ht or 0)).quantize(Decimal("0.01"))
     montant_tva = Decimal(str(montant_tva or 0)).quantize(Decimal("0.01"))
     montant_ttc = Decimal(str(montant_ttc or 0)).quantize(Decimal("0.01"))
-    commission_sntl = (montant_ht * commission).quantize(Decimal("0.01"))
-    tva_commission = (commission_sntl * tva).quantize(Decimal("0.01"))
-    net_a_regler = (montant_ttc - commission_sntl - tva_commission).quantize(Decimal("0.01"))
+    commission_sntl = calculer_commission_sntl(montant_ht, montant_ttc)
 
     rows = [
         ("Montant HT", _money(montant_ht), _SLATE_100),
@@ -544,9 +679,9 @@ def _totals_block(
     if include_commission_sntl:
         rows.extend(
             [
-                (f"Commission SNTL {int(commission * 100)}%", _money(commission_sntl), _ROUGE_PALE),
-                (f"TVA {int(tva * 100)}% sur commission", _money(tva_commission), _ROUGE_PALE),
-                ("Montant net a regler", _money(net_a_regler), _VERT_PALE),
+                (f"Commission SNTL {int(commission * 100)}%", _money(commission_sntl.commission_ht), _ROUGE_PALE),
+                (f"TVA {int(tva * 100)}% sur commission", _money(commission_sntl.tva_commission), _ROUGE_PALE),
+                ("Montant net a regler", _money(commission_sntl.net_a_regler), _VERT_PALE),
             ]
         )
 
@@ -599,6 +734,15 @@ def _build_header(ws, titre: str, numero: str, date_document) -> None:
         ws[cell].border = _border()
         ws[cell].alignment = _align("center")
         ws[cell].font = _font(bold=True)
+
+
+def _write_table_header(ws, row: int, headers: list[str], *, start_col: int = 1) -> None:
+    for offset, value in enumerate(headers, start_col):
+        cell = ws.cell(row, offset, value)
+        cell.fill = _fill(_SLATE_950)
+        cell.font = _font(bold=True, color=_BLANC)
+        cell.alignment = _align("center", wrap=True)
+        cell.border = _border()
 
 
 def _document_setup(ws, widths=None) -> None:
@@ -659,6 +803,55 @@ def _build_sntl_official_header(ws, titre: str, numero: str, date_document) -> N
     ws["C15"].font = _font(name=_SNTL_FONT, bold=True, size=18)
     ws["C15"].alignment = _align("center")
     ws.row_dimensions[15].height = 24
+
+
+def _build_sntl_releve_header(ws) -> None:
+    entreprise = obtenir_entreprise()
+
+    ws.merge_cells("A1:H3")
+    ws["A1"].value = "MONSTER GARAGE"
+    ws["A1"].font = _font(name=_SNTL_FONT, bold=True, italic=True, size=48)
+    ws["A1"].alignment = _align("left")
+    ws.row_dimensions[3].height = 36.75
+    medium = Side(style="medium", color=_NOIR)
+    for cell in ws[3][0:8]:
+        cell.border = Border(bottom=medium)
+
+    ws.merge_cells("D11:E11")
+    ws["D11"].value = "Relevé des Factures"
+    ws["F11"].value = "Date:"
+    ws["G11"].value = date.today()
+    ws["G11"].number_format = "dd/mm/yyyy"
+    ws.row_dimensions[11].height = 18.75
+    for cell_ref in ("D11", "F11", "G11"):
+        ws[cell_ref].font = _font(name=_SNTL_FONT, bold=True, size=14)
+        ws[cell_ref].alignment = _align("center" if cell_ref in {"D11", "G11"} else "left")
+
+    ws.merge_cells("D13:E13")
+    ws["D13"].value = "A"
+    ws["D13"].font = _font(name=_SNTL_FONT, size=11)
+    ws["D13"].alignment = _align("center")
+
+    ws.merge_cells("C15:F15")
+    ws["C15"].value = "La Société Nationale des Transports et de la Logistique (SNTL)"
+    ws["C15"].font = _font(name=_SNTL_FONT, bold=True, size=18)
+    ws["C15"].alignment = _align("center")
+    ws.row_dimensions[15].height = 24
+
+    _sntl_section_header(ws, "B18:C18", "Partenaire")
+    partenaire_rows = [
+        ("N° Agrément SNTL", entreprise.agrement_sntl),
+        ("Raison Sociale", entreprise.raison_sociale),
+        ("Adresse", entreprise.adresse),
+        ("Ville", entreprise.ville),
+        ("RC", entreprise.rc),
+        ("Patente", entreprise.patente),
+        ("IF", entreprise.if_fiscal),
+        ("ICE", entreprise.ice),
+        ("N° RIB", entreprise.rib),
+    ]
+    for row, (label, value) in enumerate(partenaire_rows, 19):
+        _sntl_label_value(ws, row, 2, label, value)
 
 
 def _sntl_section_header(ws, cell_range: str, title: str) -> None:
@@ -757,6 +950,12 @@ def _sntl_bon_number(dossier, client) -> str:
     return dossier.numero
 
 
+def _commission_releve_sntl(facture: FactureReparation) -> Decimal:
+    if facture.dossier.client.type != "sntl":
+        return Decimal("0.00")
+    return calculer_commission_sntl(facture.montant_ht, facture.montant_ttc).deduction_totale
+
+
 def _label_value(ws, row: int, col: int, label: str, value, *, width: int) -> None:
     ws.cell(row, col, label)
     ws.cell(row, col + 1, _display(value))
@@ -800,13 +999,7 @@ def _save(wb: Workbook) -> bytes:
 
 
 def _param_percent(cle: str, default: Decimal) -> Decimal:
-    param = ParametreSysteme.query.filter_by(cle=cle).first()
-    raw = param.valeur if param else default
-    try:
-        value = Decimal(str(raw))
-    except (InvalidOperation, ValueError):
-        value = default
-    return (value / Decimal("100")).quantize(Decimal("0.0001"))
+    return param_percent(cle, default)
 
 
 def _money(value) -> float:
@@ -927,6 +1120,19 @@ def _capitalize(value: str) -> str:
 
 def _safe_sheet_title(value: str) -> str:
     return re.sub(r"[\[\]\:\*\?\/\\]", "-", value)[:31] or "DOCUMENT"
+
+
+def _unique_sheet_title(wb: Workbook, value: str) -> str:
+    base = _safe_sheet_title(value)[:31]
+    if base not in wb.sheetnames:
+        return base
+
+    suffix = 2
+    while True:
+        candidate = f"{base[:28]} {suffix}"[:31]
+        if candidate not in wb.sheetnames:
+            return candidate
+        suffix += 1
 
 
 def _safe_filename(value: str) -> str:

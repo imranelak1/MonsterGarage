@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+
+{% block title %}Nouveau dossier SNTL - Monster Garage{% endblock %}
+
+{% block content %}
+<section class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div>
+        <p class="text-sm font-semibold text-slate-500">Module SNTL</p>
+        <h1 class="mt-1 text-3xl font-black tracking-tight text-slate-950">Nouvelle prise en charge SNTL</h1>
+    </div>
+    <a class="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50" href="{{ url_for('sntl.liste') }}">Retour SNTL</a>
+</section>
+
+<form method="post" class="grid gap-5 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <section class="grid gap-4">
+        <div>
+            <h2 class="text-lg font-black text-slate-950">Administration</h2>
+            <p class="mt-1 text-sm text-slate-500">Un seul choix centralise le client existant, le modele SNTL ou la creation d'une nouvelle fiche.</p>
+        </div>
+
+        <label class="grid gap-2 text-sm font-bold text-slate-800">
+            Administration SNTL
+            <select class="h-12 rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="sntl_client_choice" required data-sntl-client-choice>
+                <option value="">Selectionner une administration</option>
+                {% for choice in client_choices %}
+                    <option value="{{ choice.value }}" data-client-id="{{ choice.client_id }}">
+                        {{ choice.label }} - {{ choice.kind }}
+                    </option>
+                {% endfor %}
+                <option value="custom">Nouvelle administration SNTL</option>
+            </select>
+        </label>
+
+        <div class="hidden rounded-md border border-slate-200 bg-slate-50 p-4" data-custom-client>
+            <div class="grid gap-4 md:grid-cols-3">
+                <label class="grid gap-2 text-sm font-bold text-slate-800">
+                    Code client
+                    <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="client_code">
+                </label>
+                <label class="grid gap-2 text-sm font-bold text-slate-800 md:col-span-2">
+                    Administration
+                    <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="client_nom" data-custom-client-required>
+                </label>
+                <label class="grid gap-2 text-sm font-bold text-slate-800">
+                    Telephone
+                    <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="client_telephone">
+                </label>
+                <label class="grid gap-2 text-sm font-bold text-slate-800">
+                    ICE
+                    <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="client_ice">
+                </label>
+                <label class="grid gap-2 text-sm font-bold text-slate-800">
+                    Ville
+                    <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="client_ville" value="Marrakech">
+                </label>
+                <label class="grid gap-2 text-sm font-bold text-slate-800 md:col-span-3">
+                    Adresse
+                    <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="client_adresse">
+                </label>
+            </div>
+        </div>
+    </section>
+
+    <section class="border-t border-slate-200 pt-5">
+        <div class="grid gap-4">
+            <div>
+                <h2 class="text-lg font-black text-slate-950">Vehicule administratif</h2>
+                <p class="mt-1 text-sm text-slate-500">Les vehicules existants sont filtres par administration. Les nouveaux vehicules restent administratifs.</p>
+            </div>
+
+            <label class="grid gap-2 text-sm font-bold text-slate-800">
+                Vehicule
+                <select class="h-12 rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="sntl_vehicle_choice" data-sntl-vehicle-choice>
+                    <option value="new">Nouveau vehicule administratif</option>
+                    {% for vehicule in vehicules %}
+                        <option value="existing:{{ vehicule.id }}" data-client-id="{{ vehicule.client_id }}">
+                            {{ vehicule.immatriculation }} - {{ vehicule.marque }} {{ vehicule.modele }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </label>
+
+            <p class="text-xs font-semibold text-slate-500" data-vehicle-filter-hint>Selectionnez une administration pour afficher ses vehicules deja enregistres.</p>
+
+            <div class="grid gap-4 md:grid-cols-3" data-new-vehicule>
+                <label class="grid gap-2 text-sm font-bold text-slate-800">
+                    Matricule
+                    <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="vehicule_immatriculation" data-new-vehicle-required>
+                </label>
+                <label class="grid gap-2 text-sm font-bold text-slate-800">
+                    Marque
+                    <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="vehicule_marque" data-new-vehicle-required>
+                </label>
+                <label class="grid gap-2 text-sm font-bold text-slate-800">
+                    Modele
+                    <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="vehicule_modele" data-new-vehicle-required>
+                </label>
+                <label class="grid gap-2 text-sm font-bold text-slate-800">
+                    Type vehicule
+                    <select class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="vehicule_type">
+                        <option value="utilitaire">Utilitaire</option>
+                        <option value="voiture">Voiture</option>
+                        <option value="camion">Camion</option>
+                        <option value="engin">Engin</option>
+                    </select>
+                </label>
+                <label class="grid gap-2 text-sm font-bold text-slate-800">
+                    Carburant
+                    <select class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="vehicule_carburant">
+                        <option value="">Non precise</option>
+                        <option value="essence">Essence</option>
+                        <option value="diesel">Diesel</option>
+                        <option value="electrique">Electrique</option>
+                        <option value="hybride">Hybride</option>
+                    </select>
+                </label>
+            </div>
+        </div>
+    </section>
+
+    <section class="border-t border-slate-200 pt-5">
+        <h2 class="text-lg font-black text-slate-950">Bon et demande</h2>
+        <div class="mt-4 grid gap-4">
+            <label class="grid gap-2 text-sm font-bold text-slate-800">
+                N bon / OR SNTL
+                <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="numero_bon_sntl" placeholder="Auto si vide">
+            </label>
+            <label class="grid gap-2 text-sm font-bold text-slate-800">
+                Demande / panne constatee
+                <textarea class="min-h-28 rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="demande_client" required></textarea>
+            </label>
+            <label class="grid gap-2 text-sm font-bold text-slate-800">
+                Diagnostic initial
+                <textarea class="min-h-24 rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="diagnostic_initial"></textarea>
+            </label>
+            <label class="grid gap-2 text-sm font-bold text-slate-800">
+                Kilometrage entree
+                <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" type="number" name="kilometrage_entree">
+            </label>
+            <label class="grid gap-2 text-sm font-bold text-slate-800">
+                Notes internes
+                <textarea class="min-h-20 rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="notes"></textarea>
+            </label>
+        </div>
+    </section>
+
+    <div class="flex justify-end border-t border-slate-200 pt-5">
+        <button class="h-11 rounded-md bg-monster-jaune px-5 text-sm font-black text-black transition hover:bg-yellow-300 focus:outline-none focus:ring-4 focus:ring-yellow-200" type="submit">Creer le dossier SNTL</button>
+    </div>
+</form>
+
+<script>
+    (() => {
+        const clientChoice = document.querySelector("[data-sntl-client-choice]");
+        const vehicleChoice = document.querySelector("[data-sntl-vehicle-choice]");
+        const customClient = document.querySelector("[data-custom-client]");
+        const newVehicle = document.querySelector("[data-new-vehicule]");
+        const vehicleHint = document.querySelector("[data-vehicle-filter-hint]");
+        const customRequired = document.querySelectorAll("[data-custom-client-required]");
+        const vehicleRequired = document.querySelectorAll("[data-new-vehicle-required]");
+
+        const selectedClientId = () => clientChoice?.selectedOptions[0]?.dataset.clientId || "";
+
+        const updateClient = () => {
+            const isCustom = clientChoice?.value === "custom";
+            customClient?.classList.toggle("hidden", !isCustom);
+            customRequired.forEach((input) => {
+                input.required = isCustom;
+            });
+            updateVehicleChoices();
+        };
+
+        const updateVehicleChoices = () => {
+            const clientId = selectedClientId();
+            const vehicleOptions = [...(vehicleChoice?.options || [])].filter((option) => option.value !== "new");
+            let availableCount = 0;
+
+            vehicleOptions.forEach((option) => {
+                const visible = Boolean(clientId) && option.dataset.clientId === clientId;
+                option.hidden = !visible;
+                option.disabled = !visible;
+                if (visible) availableCount += 1;
+            });
+
+            if (vehicleChoice?.selectedOptions[0]?.disabled || !clientId) {
+                vehicleChoice.value = "new";
+            }
+
+            if (vehicleHint) {
+                if (!clientChoice?.value) {
+                    vehicleHint.textContent = "Selectionnez une administration pour afficher ses vehicules deja enregistres.";
+                } else if (!clientId) {
+                    vehicleHint.textContent = "Cette administration n'a pas encore de fiche enregistree : creez un vehicule administratif.";
+                } else if (!availableCount) {
+                    vehicleHint.textContent = "Aucun vehicule enregistre pour cette administration.";
+                } else {
+                    vehicleHint.textContent = `${availableCount} vehicule(s) trouve(s) pour cette administration.`;
+                }
+            }
+
+            updateVehicleForm();
+        };
+
+        const updateVehicleForm = () => {
+            const isNewVehicle = !vehicleChoice || vehicleChoice.value === "new";
+            newVehicle?.classList.toggle("hidden", !isNewVehicle);
+            vehicleRequired.forEach((input) => {
+                input.required = isNewVehicle;
+            });
+        };
+
+        clientChoice?.addEventListener("change", updateClient);
+        vehicleChoice?.addEventListener("change", updateVehicleForm);
+        updateClient();
+    })();
+</script>
+{% endblock %}

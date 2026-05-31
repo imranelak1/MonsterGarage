@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dossiers Atelier — Monster Garage ERP</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <link rel="stylesheet" href="_shared.css">
+  <style>
+    .filter-bar { background:#fff; border:1px solid rgba(0,0,0,0.08); border-radius:14px; padding:14px 18px; margin-bottom:18px; display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .search-wrap { position:relative; flex:1; min-width:240px; }
+    .search-wrap i { position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#94A3B8; pointer-events:none; }
+    .search-wrap input { padding-left:38px; }
+    .select-wrap select { height:40px; border:1px solid rgba(0,0,0,0.12); border-radius:10px; padding:0 32px 0 12px; font-size:13px; font-family:inherit; background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748B' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center; appearance:none; color:#0F172A; cursor:pointer; outline:none; }
+    .select-wrap select:focus { border-color:#FFD700; box-shadow:0 0 0 3px rgba(255,215,0,0.15); }
+
+    /* Table container */
+    .table-container { background:#fff; border:1px solid rgba(0,0,0,0.07); border-radius:16px; overflow:hidden; }
+    .table-toolbar { padding:16px 20px; border-bottom:1px solid rgba(0,0,0,0.06); display:flex; align-items:center; justify-content:space-between; }
+    .table-count { font-size:13px; font-weight:700; color:#64748B

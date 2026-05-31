@@ -13,7 +13,7 @@
 </section>
 
 <section class="mb-5 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-    <form class="flex flex-col gap-3 sm:flex-row" method="get">
+    <form class="flex flex-col gap-3 xl:flex-row" method="get">
         <input class="h-11 flex-1 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100"
                type="search" name="q" value="{{ recherche }}" placeholder="Rechercher devis, client, véhicule, dossier...">
         <select class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="statut">
@@ -22,13 +22,16 @@
             <option value="approved" {% if statut == 'approved' %}selected{% endif %}>Approuvé</option>
             <option value="rejected" {% if statut == 'rejected' %}selected{% endif %}>Refusé</option>
         </select>
+        <input class="h-11 rounded-md border border-slate-300 px-3 text-sm font-semibold text-slate-700 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" type="date" name="date_debut" value="{{ periode.valeur_debut }}" aria-label="Date debut">
+        <input class="h-11 rounded-md border border-slate-300 px-3 text-sm font-semibold text-slate-700 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" type="date" name="date_fin" value="{{ periode.valeur_fin }}" aria-label="Date fin">
         <button class="h-11 rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50" type="submit">Rechercher</button>
     </form>
 </section>
 
 <section class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-    <div class="grid grid-cols-[120px_1fr_1fr_130px_140px] gap-4 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-wide text-slate-500">
+    <div class="grid grid-cols-[120px_110px_1fr_1fr_130px_140px] gap-4 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-wide text-slate-500">
         <span>Devis</span>
+        <span>Date</span>
         <span>Dossier / client</span>
         <span>Véhicule</span>
         <span class="text-right">Montant TTC</span>
@@ -36,9 +39,10 @@
     </div>
     <div class="divide-y divide-slate-200">
         {% for item in devis %}
-            <a class="grid grid-cols-[120px_1fr_1fr_130px_140px] gap-4 px-4 py-4 text-sm transition hover:bg-yellow-50"
+            <a class="grid grid-cols-[120px_110px_1fr_1fr_130px_140px] gap-4 px-4 py-4 text-sm transition hover:bg-yellow-50"
                href="{{ url_for('dossiers.detail', dossier_id=item.dossier_id) }}">
                 <span class="font-black text-slate-950">v{{ item.version }}</span>
+                <span class="font-semibold text-slate-500">{{ item.created_at.strftime("%d/%m/%Y") }}</span>
                 <span class="min-w-0">
                     <span class="block font-black text-slate-950">{{ item.dossier.numero }}</span>
                     <span class="block truncate font-semibold text-slate-600">{{ item.dossier.client.nom }}</span>
@@ -61,4 +65,5 @@
         {% endfor %}
     </div>
 </section>
+{% include "partials/pagination.html" %}
 {% endblock %}

@@ -1,9 +1,12 @@
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import login_required
 from sqlalchemy import or_
+from sqlalchemy.orm import selectinload
 
 from app.extensions import db
 from app.models import Client, DossierReparation, Vehicule
+from app.services.date_filters import appliquer_filtre_periode, periode_depuis_requete
+from app.services.pagination import paginer
 from app.services.telephone import normaliser_telephone
 
 bp = Blueprint("clients", __name__, url_prefix="/clients")
@@ -14,6 +17,7 @@ bp = Blueprint("clients", __name__, url_prefix="/clients")
 def liste():
     recherche = request.args.get("q", "").strip()
     type_client = request.args.get("type", "").strip()
+    periode = periode_depuis_requete()
     requete = Client.query
 
     if recherche:
@@ -29,8 +33,14 @@ def liste():
         )
     if type_client in {"particulier", "administration", "sntl"}:
         requete = requete.filter(Client.type == type_client)
+    requete = appliquer_filtre_periode(requete, Client.created_at, periode)
 
-    clients = requete.order_by(Client.created_at.desc()).limit(100).all()
+    requete = requete.options(
+        selectinload(Client.vehicules),
+        selectinload(Client.dossiers_reparation),
+    )
+    pagination = paginer(requete.order_by(Client.created_at.desc()))
+    clients = pagination.items
     statuts_ouverts = {"pending_devis", "pending_approval", "in_progress", "paused_pending_approval"}
     resumes = []
     for client in clients:
@@ -48,17 +58,20 @@ def liste():
     stats = {
         "total": Client.query.count(),
         "particuliers": Client.query.filter_by(type="particulier").count(),
-        "administrations": Client.query.filter(Client.type.in_(["administration", "sntl"])).count(),
+        "administrations": Client.query.filter_by(type="administration").count(),
+        "sntl": Client.query.filter_by(type="sntl").count(),
         "vehicules": Vehicule.query.count(),
         "dossiers_ouverts": DossierReparation.query.filter(DossierReparation.statut.in_(statuts_ouverts)).count(),
     }
     return render_template(
         "clients/liste.html",
         clients=clients,
+        pagination=pagination,
         resumes=resumes,
         stats=stats,
         recherche=recherche,
         type_client=type_client,
+        periode=periode,
     )
 
 

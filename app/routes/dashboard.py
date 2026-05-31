@@ -1,7 +1,11 @@
+from datetime import date
+from decimal import Decimal
+
 from flask import Blueprint, redirect, render_template, url_for
 from flask_login import login_required
 
-from app.models import DossierReparation, FactureReparation
+from app.extensions import db
+from app.models import Client, DossierReparation, EntreeChiffreAffaires, FactureReparation
 
 bp = Blueprint("dashboard", __name__)
 
@@ -56,15 +60,27 @@ def index():
 @bp.route("/tableau-de-bord")
 @login_required
 def accueil():
-    total_dossiers = DossierReparation.query.count()
-    attente_accord = DossierReparation.query.filter_by(statut="pending_approval").count()
-    en_reparation = DossierReparation.query.filter(
-        DossierReparation.statut.in_(["in_progress", "paused_pending_approval"])
-    ).count()
+    aujourd_hui = date.today()
+    ca_mois = (
+        db.session.query(db.func.coalesce(db.func.sum(EntreeChiffreAffaires.montant), 0))
+        .filter(
+            db.extract("year", EntreeChiffreAffaires.date) == aujourd_hui.year,
+            db.extract("month", EntreeChiffreAffaires.date) == aujourd_hui.month,
+        )
+        .scalar()
+    )
+    ca_mois = Decimal(str(ca_mois or 0)).quantize(Decimal("0.01"))
+    dossiers_atelier = DossierReparation.query.join(DossierReparation.client).filter(Client.type != "sntl")
+    total_dossiers = dossiers_atelier.count()
+    dossiers_sntl = DossierReparation.query.join(DossierReparation.client).filter(Client.type == "sntl").count()
+    attente_accord = dossiers_atelier.filter(DossierReparation.statut == "pending_approval").count()
+    en_reparation = dossiers_atelier.filter(DossierReparation.statut.in_(["in_progress", "paused_pending_approval"])).count()
     factures_a_suivre = FactureReparation.query.filter(FactureReparation.statut.in_(["emise", "livree"])).count()
 
     indicateurs = [
+        {"libelle": "CA manuel du mois", "valeur": f"{ca_mois:,.2f} MAD".replace(",", " "), "detail": "Saisie gerant"},
         {"libelle": "Dossiers atelier", "valeur": total_dossiers, "detail": "Flux complet"},
+        {"libelle": "Dossiers SNTL", "valeur": dossiers_sntl, "detail": "Module dedie"},
         {"libelle": "Devis en attente", "valeur": attente_accord, "detail": "Accord client"},
         {"libelle": "En réparation", "valeur": en_reparation, "detail": "Actif ou pause"},
         {"libelle": "Livraison / règlement", "valeur": factures_a_suivre, "detail": "Factures à suivre"},
@@ -73,7 +89,8 @@ def accueil():
     colonnes = []
     for groupe in GROUPES_FLUX:
         dossiers = (
-            DossierReparation.query.filter(DossierReparation.statut.in_(groupe["statuts"]))
+            DossierReparation.query.join(DossierReparation.client)
+            .filter(Client.type != "sntl", DossierReparation.statut.in_(groupe["statuts"]))
             .order_by(DossierReparation.updated_at.desc())
             .limit(5)
             .all()

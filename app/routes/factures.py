@@ -1,18 +1,22 @@
 from flask import Blueprint, Response, flash, redirect, render_template, request, url_for
 from flask_login import login_required
+from sqlalchemy.orm import joinedload
 
 from app.extensions import db
 from app.models import Client, DossierReparation, FactureReparation
+from app.services.date_filters import appliquer_filtre_periode, periode_depuis_requete
 from app.services.dossiers import RegleMetierErreur
 from app.services.export_documents import (
     XLSX_MIMETYPE,
     exporter_facture_excel,
     exporter_releve_client_excel,
+    exporter_situation_clients_excel,
     nom_fichier_facture,
     nom_fichier_releve_client,
 )
 from app.services.export_pdf import PDF_MIMETYPE, exporter_facture_pdf, nom_fichier_facture_pdf
 from app.services.factures import enregistrer_reglement, generer_facture, marquer_livree
+from app.services.pagination import paginer
 
 bp = Blueprint("factures", __name__, url_prefix="/factures")
 
@@ -21,11 +25,34 @@ bp = Blueprint("factures", __name__, url_prefix="/factures")
 @login_required
 def liste():
     statut = request.args.get("statut", "").strip()
+    recherche = request.args.get("q", "").strip()
+    periode = periode_depuis_requete()
     requete = FactureReparation.query
     if statut:
         requete = requete.filter_by(statut=statut)
-    factures = requete.order_by(FactureReparation.created_at.desc()).limit(100).all()
-    return render_template("factures/liste.html", factures=factures, statut=statut)
+    requete = (
+        requete
+        .join(FactureReparation.dossier)
+        .join(DossierReparation.client)
+        .join(DossierReparation.vehicule)
+    )
+    requete = appliquer_filtre_periode(requete, FactureReparation.created_at, periode)
+    if recherche:
+        motif = f"%{recherche}%"
+        requete = requete.filter(
+            db.or_(
+                FactureReparation.numero.ilike(motif),
+                DossierReparation.numero.ilike(motif),
+                Client.nom.ilike(motif),
+                Client.code.ilike(motif),
+            )
+        )
+    requete = requete.options(
+        joinedload(FactureReparation.dossier).joinedload(DossierReparation.client),
+        joinedload(FactureReparation.dossier).joinedload(DossierReparation.vehicule),
+    )
+    pagination = paginer(requete.order_by(FactureReparation.created_at.desc()))
+    return render_template("factures/liste.html", factures=pagination.items, pagination=pagination, statut=statut, recherche=recherche, periode=periode)
 
 
 @bp.route("/<int:facture_id>")
@@ -87,6 +114,33 @@ def releve_client(client_id):
         data,
         mimetype=XLSX_MIMETYPE,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@bp.route("/clients/situation-financiere")
+@login_required
+def situation_financiere_clients():
+    factures = (
+        FactureReparation.query.join(FactureReparation.dossier)
+        .join(DossierReparation.client)
+        .filter(FactureReparation.statut != "annulee")
+        .order_by(Client.nom.asc(), FactureReparation.created_at.asc())
+        .all()
+    )
+    client_ids = []
+    clients_par_id = {}
+    for facture in factures:
+        client_db = facture.dossier.client
+        if client_db.id not in clients_par_id:
+            clients_par_id[client_db.id] = client_db
+            client_ids.append(client_db.id)
+
+    clients = [clients_par_id[client_id] for client_id in client_ids]
+    data = exporter_situation_clients_excel(clients, factures)
+    return Response(
+        data,
+        mimetype=XLSX_MIMETYPE,
+        headers={"Content-Disposition": 'attachment; filename="SITUATION_FINANCIERE_CLIENTS.xlsx"'},
     )
 
 

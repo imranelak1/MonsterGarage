@@ -27,7 +27,7 @@
                 </div>
 
                 <div class="mt-7 flex flex-col gap-3 sm:flex-row">
-                    <a class="mg-btn-primary" href="{{ url_for('dossiers.nouveau') }}">Nouveau dossier</a>
+                    <button class="mg-btn-primary" type="button" data-new-dossier-choice>Nouveau dossier</button>
                     <a class="mg-btn-secondary" href="{{ url_for('dossiers.liste') }}">Historique</a>
                 </div>
             </div>
@@ -141,12 +141,12 @@
                             </div>
                         </a>
                     {% else %}
-                        <a class="grid min-h-40 place-items-center rounded-[1.5rem] border-2 border-dashed border-slate-200 bg-white/60 p-6 text-center transition hover:border-slate-300 hover:bg-white" href="{{ url_for('dossiers.nouveau') }}">
+                        <button class="grid min-h-40 w-full place-items-center rounded-[1.5rem] border-2 border-dashed border-slate-200 bg-white/60 p-6 text-center transition hover:border-slate-300 hover:bg-white" type="button" data-new-dossier-choice>
                             <div>
                                 <div class="mx-auto grid h-12 w-12 place-items-center rounded-full border border-slate-200 bg-slate-50 text-xl font-black text-slate-300">+</div>
                                 <p class="mt-4 text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Zone disponible</p>
                             </div>
-                        </a>
+                        </button>
                     {% endfor %}
                 </section>
             {% endfor %}

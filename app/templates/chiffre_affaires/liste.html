@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block title %}Chiffre d affaires - Monster Garage{% endblock %}
+
+{% block content %}
+<section class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div>
+        <p class="text-sm font-semibold text-slate-500">Pilotage manuel</p>
+        <h1 class="mt-1 text-3xl font-black tracking-tight text-slate-950">Chiffre d affaires</h1>
+    </div>
+    <a class="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50" href="{{ url_for('dashboard.accueil') }}">Tableau de bord</a>
+</section>
+
+<section class="mb-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+    <article class="rounded-lg border border-yellow-200 bg-yellow-50 p-4 shadow-sm">
+        <p class="text-[10px] font-black uppercase tracking-[0.16em] text-yellow-700">CA periode filtree</p>
+        <p class="mt-2 text-2xl font-black text-black">{{ "%.2f"|format(total_periode) }} MAD</p>
+    </article>
+    <article class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <p class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">CA mois courant</p>
+        <p class="mt-2 text-2xl font-black text-slate-950">{{ "%.2f"|format(total_mois) }} MAD</p>
+    </article>
+    {% for cle in ['atelier', 'sntl'] %}
+    <article class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <p class="text-[10px] font-black uppercase tracking-[0.16em] {% if cle == 'sntl' %}text-yellow-700{% else %}text-slate-400{% endif %}">{{ sources[cle] }}</p>
+        <p class="mt-2 text-2xl font-black text-slate-950">{{ "%.2f"|format(totaux_sources[cle]) }} MAD</p>
+    </article>
+    {% endfor %}
+</section>
+
+<section class="mb-5 grid gap-5 xl:grid-cols-[420px_1fr]">
+    <form class="grid gap-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm" method="post">
+        <div>
+            <h2 class="text-lg font-black text-slate-950">Saisie manuelle</h2>
+            <p class="mt-1 text-sm font-semibold text-slate-500">Ce montant est saisi par le gerant et reste independant des factures.</p>
+        </div>
+        <label class="grid gap-2 text-sm font-bold text-slate-800">
+            Date du CA
+            <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" type="date" name="date" value="{{ aujourd_hui.isoformat() }}" required>
+        </label>
+        <label class="grid gap-2 text-sm font-bold text-slate-800">
+            Montant CA TTC
+            <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="montant" inputmode="decimal" placeholder="Ex : 12500.00" required>
+        </label>
+        <label class="grid gap-2 text-sm font-bold text-slate-800">
+            Source
+            <select class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="source">
+                {% for cle, libelle in sources.items() %}
+                    <option value="{{ cle }}">{{ libelle }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label class="grid gap-2 text-sm font-bold text-slate-800">
+            Libelle
+            <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="libelle" placeholder="Ex : CA journalier atelier" required>
+        </label>
+        <label class="grid gap-2 text-sm font-bold text-slate-800">
+            Notes
+            <textarea class="min-h-20 rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="notes"></textarea>
+        </label>
+        <button class="h-11 rounded-md bg-monster-jaune px-5 text-sm font-black text-black transition hover:bg-yellow-300 focus:outline-none focus:ring-4 focus:ring-yellow-200" type="submit">Enregistrer le CA</button>
+    </form>
+
+    <section class="grid content-start gap-4">
+        <form class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" method="get">
+            <div class="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto]">
+                <input class="h-11 rounded-md border border-slate-300 px-3 text-sm font-semibold text-slate-700 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" type="date" name="date_debut" value="{{ periode.valeur_debut }}" aria-label="Date debut">
+                <input class="h-11 rounded-md border border-slate-300 px-3 text-sm font-semibold text-slate-700 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" type="date" name="date_fin" value="{{ periode.valeur_fin }}" aria-label="Date fin">
+                <select class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="source">
+                    <option value="">Toutes les sources</option>
+                    {% for cle, libelle in sources.items() %}
+                        <option value="{{ cle }}" {% if source == cle %}selected{% endif %}>{{ libelle }}</option>
+                    {% endfor %}
+                </select>
+                <button class="h-11 rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50" type="submit">Filtrer</button>
+            </div>
+        </form>
+
+        <section class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+            <div class="grid grid-cols-[105px_110px_1fr_130px_90px] gap-4 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-wide text-slate-500">
+                <span>Date</span>
+                <span>Source</span>
+                <span>Libelle</span>
+                <span class="text-right">Montant</span>
+                <span></span>
+            </div>
+            <div class="divide-y divide-slate-200">
+                {% for entree in entrees %}
+                    <div class="grid grid-cols-[105px_110px_1fr_130px_90px] gap-4 px-4 py-4 text-sm">
+                        <span class="font-semibold text-slate-600">{{ entree.date.strftime("%d/%m/%Y") }}</span>
+                        <span class="font-black {% if entree.source == 'sntl' %}text-yellow-800{% else %}text-slate-700{% endif %}">{{ entree.source_libelle }}</span>
+                        <span class="min-w-0">
+                            <span class="block truncate font-black text-slate-950">{{ entree.libelle }}</span>
+                            {% if entree.notes %}<span class="block truncate text-xs font-semibold text-slate-400">{{ entree.notes }}</span>{% endif %}
+                        </span>
+                        <span class="text-right font-black text-slate-950">{{ "%.2f"|format(entree.montant) }} MAD</span>
+                        <form class="text-right" method="post" action="{{ url_for('chiffre_affaires.supprimer', entree_id=entree.id) }}">
+                            <button class="rounded-md border border-red-100 bg-red-50 px-2.5 py-1.5 text-[10px] font-black uppercase text-red-700 transition hover:bg-red-100" type="submit">Supprimer</button>
+                        </form>
+                    </div>
+                {% else %}
+                    <p class="px-4 py-8 text-center text-sm font-semibold text-slate-500">Aucune entree de CA pour cette periode.</p>
+                {% endfor %}
+            </div>
+        </section>
+        {% include "partials/pagination.html" %}
+    </section>
+</section>
+{% endblock %}

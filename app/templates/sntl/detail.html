@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+
+{% block title %}{{ dossier.numero }} SNTL - Monster Garage{% endblock %}
+
+{% block content %}
+{% set statuts_facturables = ['completed', 'cancelled_billable'] %}
+{% set workflow_step = 1 %}
+{% if dossier.statut == 'pending_approval' %}
+    {% set workflow_step = 2 %}
+{% elif dossier.statut == 'in_progress' or dossier.statut == 'paused_pending_approval' %}
+    {% set workflow_step = 3 %}
+{% elif dossier.statut in statuts_facturables %}
+    {% set workflow_step = 4 %}
+    {% if dossier.facture %}
+        {% set workflow_step = 5 %}
+    {% endif %}
+{% elif dossier.statut == 'cancelled' %}
+    {% set workflow_step = 0 %}
+{% endif %}
+
+<section class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div>
+        <p class="text-sm font-semibold text-slate-500">Module SNTL</p>
+        <h1 class="mt-1 text-3xl font-black tracking-tight text-slate-950">{{ dossier.numero }}</h1>
+    </div>
+    <a class="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50" href="{{ url_for('sntl.liste') }}">Retour SNTL</a>
+</section>
+
+<section class="grid gap-5 xl:grid-cols-[360px_1fr]">
+    <aside class="grid gap-4 self-start xl:sticky xl:top-24">
+        <section class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+            <div class="border-b border-slate-200 bg-slate-950 px-5 py-4 text-white">
+                <p class="text-[10px] font-black uppercase tracking-[0.2em] text-monster-jaune">{{ dossier.statut_libelle }}</p>
+                <h2 class="mt-1 text-xl font-black">{{ dossier.client.nom }}</h2>
+                <p class="mt-1 text-sm font-semibold text-slate-300">{{ dossier.vehicule.libelle }}</p>
+            </div>
+            <dl class="grid gap-3 p-5 text-sm">
+                <div class="flex justify-between gap-4"><dt class="text-slate-500">Bon SNTL</dt><dd class="font-black text-slate-900">{{ dossier.numero_bon_sntl or "-" }}</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-slate-500">Matricule</dt><dd class="font-bold text-slate-900">{{ dossier.vehicule.immatriculation }}</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-slate-500">Vehicule</dt><dd class="text-right font-bold text-slate-900">{{ dossier.vehicule.marque }} {{ dossier.vehicule.modele }}</dd></div>
+                {% if dossier.kilometrage_entree %}
+                <div class="flex justify-between gap-4"><dt class="text-slate-500">Kilometrage</dt><dd class="font-bold text-slate-900">{{ dossier.kilometrage_entree }} km</dd></div>
+                {% endif %}
+                <div class="flex justify-between gap-4"><dt class="text-slate-500">Dernier devis</dt><dd class="font-black text-slate-900">{{ dossier.dernier_devis.statut_libelle if dossier.dernier_devis else "Aucun" }}</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-slate-500">Facture</dt><dd class="font-black text-slate-900">{{ dossier.facture.numero if dossier.facture else "Non generee" }}</dd></div>
+            </dl>
+        </section>
+
+        <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 class="text-sm font-black text-slate-950">Demande SNTL</h2>
+            <p class="mt-3 text-sm leading-6 text-slate-700">{{ dossier.demande_client }}</p>
+            {% if dossier.diagnostic_initial %}
+            <p class="mt-3 rounded-md bg-slate-50 p-3 text-xs font-semibold leading-5 text-slate-600">{{ dossier.diagnostic_initial }}</p>
+            {% endif %}
+        </section>
+    </aside>
+
+    <div class="grid gap-5">
+        <section class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+            <div class="border-b border-slate-200 bg-slate-950 px-5 py-4 text-white">
+                <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                        <p class="text-[10px] font-black uppercase tracking-[0.22em] text-monster-jaune">Workflow SNTL</p>
+                        <h2 class="mt-1 text-2xl font-black tracking-tight">Suivi administratif</h2>
+                    </div>
+                    <span class="inline-flex w-fit rounded-full border border-yellow-300/30 bg-yellow-300/10 px-4 py-2 text-xs font-black uppercase tracking-[0.14em] text-monster-jaune">{{ dossier.statut_libelle }}</span>
+                </div>
+            </div>
+            <div class="grid gap-3 p-5 md:grid-cols-5">
+                {% for index, label in [(1, 'Bon + devis'), (2, 'Accord'), (3, 'Reparation'), (4, 'Facture'), (5, 'Releve')] %}
+                    <div class="rounded-lg border px-3 py-3 {% if workflow_step > index %}border-emerald-200 bg-emerald-50{% elif workflow_step == index %}border-monster-jaune bg-yellow-50 shadow-md shadow-yellow-200/60{% else %}border-slate-200 bg-slate-50{% endif %}">
+                        <span class="text-[9px] font-black uppercase tracking-[0.14em] {% if workflow_step >= index %}text-black{% else %}text-slate-400{% endif %}">Etape {{ index }}</span>
+                        <p class="mt-2 text-sm font-black {% if workflow_step > index %}text-emerald-900{% elif workflow_step == index %}text-black{% else %}text-slate-500{% endif %}">{{ label }}</p>
+                    </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <div class="mb-3">
+                <h2 class="text-lg font-black text-slate-950">Poste de commande SNTL</h2>
+                <p class="mt-1 text-xs font-semibold text-slate-500">Actions limitees au flux SNTL.</p>
+            </div>
+
+            <div class="space-y-2">
+                <article class="grid gap-3 rounded-lg border p-3 {% if workflow_step == 1 %}border-monster-jaune bg-yellow-50{% else %}border-slate-200 bg-white{% endif %} lg:grid-cols-[1fr_260px]">
+                    <div>
+                        <h3 class="text-sm font-black text-slate-950">Devis SNTL</h3>
+                        {% if dossier.dernier_devis %}
+                        <p class="mt-0.5 text-xs leading-5 text-slate-600">Dernier devis : v{{ dossier.dernier_devis.version }} - {{ dossier.dernier_devis.statut_libelle }} - {{ "%.2f"|format(dossier.dernier_devis.montant_ttc) }} MAD TTC.</p>
+                        {% else %}
+                        <p class="mt-0.5 text-xs leading-5 text-slate-600">Le dossier attend son devis SNTL officiel.</p>
+                        {% endif %}
+                    </div>
+                    <div>
+                        {% if dossier.statut in ['pending_devis', 'paused_pending_approval'] %}
+                        <a class="inline-flex h-9 w-full items-center justify-center rounded-md bg-monster-jaune px-3 text-xs font-black text-black" href="{{ url_for('sntl.nouveau_devis', dossier_id=dossier.id) }}">Creer devis SNTL</a>
+                        {% endif %}
+                        {% if dossier.dernier_devis %}
+                        <div class="mt-2 grid grid-cols-2 gap-2">
+                            <a class="inline-flex h-8 items-center justify-center rounded-md border border-slate-200 bg-white px-2 text-[10px] font-black uppercase text-slate-600 hover:bg-slate-50" href="{{ url_for('dossiers.voir_devis_pdf', devis_id=dossier.dernier_devis.id) }}" target="_blank" rel="noopener">PDF</a>
+                            <a class="inline-flex h-8 items-center justify-center rounded-md border border-slate-200 bg-white px-2 text-[10px] font-black uppercase text-slate-600 hover:bg-slate-50" href="{{ url_for('dossiers.telecharger_devis', devis_id=dossier.dernier_devis.id) }}">Excel</a>
+                        </div>
+                        {% endif %}
+                    </div>
+                </article>
+
+                <article class="grid gap-3 rounded-lg border p-3 {% if workflow_step == 2 %}border-monster-jaune bg-yellow-50{% else %}border-slate-200 bg-white{% endif %} lg:grid-cols-[1fr_260px]">
+                    <div>
+                        <h3 class="text-sm font-black text-slate-950">Accord SNTL</h3>
+                        <p class="mt-0.5 text-xs leading-5 text-slate-600">Validation du devis SNTL et passage en reparation.</p>
+                    </div>
+                    <div>
+                        {% if dossier.dernier_devis and dossier.dernier_devis.statut == 'pending' %}
+                        <form class="grid gap-2" method="post" action="{{ url_for('sntl.approuver', devis_id=dossier.dernier_devis.id) }}">
+                            <select class="h-9 rounded-md border border-slate-300 bg-white px-3 text-xs" name="mode_accord">
+                                <option value="telephone">Telephone</option>
+                                <option value="signature">Signature</option>
+                                <option value="systeme">Systeme</option>
+                            </select>
+                            <button class="h-9 rounded-md bg-emerald-600 px-3 text-xs font-black text-white" type="submit">Approuver</button>
+                        </form>
+                        {% else %}
+                        <span class="inline-flex w-full items-center justify-center rounded-md bg-slate-100 px-3 py-2 text-[10px] font-black uppercase text-slate-500">En attente</span>
+                        {% endif %}
+                    </div>
+                </article>
+
+                <article class="grid gap-3 rounded-lg border p-3 {% if workflow_step == 3 %}border-monster-jaune bg-yellow-50{% else %}border-slate-200 bg-white{% endif %} lg:grid-cols-[1fr_260px]">
+                    <div>
+                        <h3 class="text-sm font-black text-slate-950">Reparation</h3>
+                        <p class="mt-0.5 text-xs leading-5 text-slate-600">Une fois terminee, la facture SNTL officielle peut etre generee.</p>
+                    </div>
+                    <div>
+                        {% if dossier.statut == 'in_progress' %}
+                        <form method="post" action="{{ url_for('sntl.terminer', dossier_id=dossier.id) }}">
+                            <button class="h-9 w-full rounded-md bg-emerald-600 px-3 text-xs font-black text-white" type="submit">Marquer termine</button>
+                        </form>
+                        {% else %}
+                        <span class="inline-flex w-full items-center justify-center rounded-md bg-slate-100 px-3 py-2 text-[10px] font-black uppercase text-slate-500">En attente</span>
+                        {% endif %}
+                    </div>
+                </article>
+
+                <article class="grid gap-3 rounded-lg border p-3 {% if workflow_step == 4 %}border-monster-jaune bg-yellow-50{% else %}border-slate-200 bg-white{% endif %} lg:grid-cols-[1fr_260px]">
+                    <div>
+                        <h3 class="text-sm font-black text-slate-950">Facture SNTL</h3>
+                        {% if dossier.facture %}
+                        <p class="mt-0.5 text-xs leading-5 text-slate-600">Facture {{ dossier.facture.numero }} generee. Statut : {{ dossier.facture.statut_libelle }}.</p>
+                        {% else %}
+                        <p class="mt-0.5 text-xs leading-5 text-slate-600">Generation depuis le dernier devis approuve.</p>
+                        {% endif %}
+                    </div>
+                    <div>
+                        {% if dossier.statut in statuts_facturables and not dossier.facture %}
+                        <form method="post" action="{{ url_for('sntl.facturer', dossier_id=dossier.id) }}">
+                            <button class="h-9 w-full rounded-md bg-monster-jaune px-3 text-xs font-black text-black" type="submit">Generer facture SNTL</button>
+                        </form>
+                        {% elif dossier.facture %}
+                        <a class="inline-flex h-9 w-full items-center justify-center rounded-md bg-slate-950 px-3 text-xs font-black text-white" href="{{ url_for('factures.detail', facture_id=dossier.facture.id) }}">Voir facture</a>
+                        <a class="mt-2 inline-flex h-8 w-full items-center justify-center rounded-md border border-slate-200 bg-white px-2 text-[10px] font-black uppercase text-slate-600 hover:bg-slate-50" href="{{ url_for('factures.voir_pdf', facture_id=dossier.facture.id) }}" target="_blank" rel="noopener">PDF</a>
+                        {% else %}
+                        <span class="inline-flex w-full items-center justify-center rounded-md bg-slate-100 px-3 py-2 text-[10px] font-black uppercase text-slate-500">En attente</span>
+                        {% endif %}
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <section class="grid gap-5 xl:grid-cols-[1fr_0.9fr]">
+            <article class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                <h2 class="text-lg font-black text-slate-950">Devis SNTL</h2>
+                <div class="mt-4 divide-y divide-slate-200">
+                    {% for devis in dossier.devis %}
+                    <section class="py-4 first:pt-0">
+                        <div class="flex items-start justify-between gap-4">
+                            <div>
+                                <h3 class="font-black text-slate-950">v{{ devis.version }} - {{ devis.objet }}</h3>
+                                <p class="text-sm font-semibold text-slate-500">{{ devis.statut_libelle }}</p>
+                            </div>
+                            <strong class="text-lg font-black text-slate-950">{{ "%.2f"|format(devis.montant_ttc) }} MAD</strong>
+                        </div>
+                    </section>
+                    {% else %}
+                    <p class="py-8 text-center text-sm font-semibold text-slate-500">Aucun devis SNTL cree.</p>
+                    {% endfor %}
+                </div>
+            </article>
+
+            <article class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                <h2 class="text-lg font-black text-slate-950">Journal SNTL</h2>
+                <div class="mt-4 divide-y divide-slate-200">
+                    {% for action in dossier.journal|sort(attribute='created_at', reverse=True) %}
+                    <article class="py-3 text-sm">
+                        <div class="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                            <p class="font-black text-slate-950">{{ action.action }}</p>
+                            <time class="text-xs font-bold text-slate-500" datetime="{{ action.created_at.isoformat() }}">{{ action.created_at.strftime("%d/%m/%Y %H:%M") }}</time>
+                        </div>
+                        <p class="text-slate-600">{{ action.details }}</p>
+                    </article>
+                    {% else %}
+                    <p class="text-sm font-semibold text-slate-500">Aucune action enregistree.</p>
+                    {% endfor %}
+                </div>
+            </article>
+        </section>
+    </div>
+</section>
+{% endblock %}
