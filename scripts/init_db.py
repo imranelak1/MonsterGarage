@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 
@@ -10,7 +11,7 @@ from app.services.parametres import assurer_parametres_defaut, obtenir_entrepris
 
 
 def main() -> None:
-    app = create_app()
+    app = create_app(os.environ.get("FLASK_CONFIG", "development"))
     with app.app_context():
         db.create_all()
 

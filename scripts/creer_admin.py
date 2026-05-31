@@ -1,4 +1,5 @@
 import getpass
+import os
 import sys
 from pathlib import Path
 
@@ -10,7 +11,7 @@ from app.models import Utilisateur
 
 
 def main() -> None:
-    app = create_app()
+    app = create_app(os.environ.get("FLASK_CONFIG", "development"))
     with app.app_context():
         db.create_all()
         login = input("Identifiant admin [admin] : ").strip() or "admin"
