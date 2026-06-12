@@ -31,11 +31,12 @@ class Employe(db.Model):
     date_embauche = db.Column(db.Date)
 
     type_remuneration = db.Column(
-        db.Enum("salaire_fixe", "tache", "mixte", name="type_remuneration_employe"),
+        db.Enum("salaire_fixe", "mensuelle", "tache", "mixte", name="type_remuneration_employe"),
         nullable=False,
         default="tache",
     )
     salaire_quinzaine = db.Column(db.Numeric(10, 2))
+    salaire_mensuel = db.Column(db.Numeric(10, 2))
     taux_journalier = db.Column(db.Numeric(10, 2))
 
     actif = db.Column(db.Boolean, default=True, nullable=False)
@@ -78,7 +79,12 @@ class Employe(db.Model):
 
     @property
     def type_remuneration_libelle(self):
-        labels = {"salaire_fixe": "Salaire fixe", "tache": "À la tâche", "mixte": "Mixte"}
+        labels = {
+            "salaire_fixe": "Salaire fixe",
+            "mensuelle": "Mensuelle",
+            "tache": "À la tâche",
+            "mixte": "Mixte",
+        }
         return labels.get(self.type_remuneration, self.type_remuneration)
 
     def __repr__(self):

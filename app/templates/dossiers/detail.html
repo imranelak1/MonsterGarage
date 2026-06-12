@@ -118,10 +118,59 @@
             <dl class="mt-3 grid gap-2 text-sm">
                 <div class="flex justify-between gap-4"><dt class="text-slate-500">Dernier devis</dt><dd class="font-black text-slate-900">{{ dossier.dernier_devis.statut_libelle if dossier.dernier_devis else "Aucun" }}</dd></div>
                 <div class="flex justify-between gap-4"><dt class="text-slate-500">Facture</dt><dd class="font-black text-slate-900">{{ dossier.facture.numero if dossier.facture else "Non générée" }}</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-slate-500">Avances client</dt><dd class="font-black text-slate-900">{{ "%.2f"|format(dossier.montant_avances_client) }} MAD</dd></div>
                 {% if dossier.numero_bon_sntl %}
                 <div class="flex justify-between gap-4"><dt class="text-slate-500">Bon SNTL</dt><dd class="font-black text-slate-900">{{ dossier.numero_bon_sntl }}</dd></div>
                 {% endif %}
             </dl>
+        </section>
+
+        <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <h3 class="text-sm font-black text-slate-950">Avance avant réparation</h3>
+            {% if dossier.avances_client %}
+                <div class="mt-3 divide-y divide-slate-100">
+                    {% for avance in dossier.avances_client %}
+                    <div class="py-2 text-sm">
+                        <div class="flex justify-between gap-3">
+                            <span class="font-bold text-slate-700">{{ avance.date.strftime("%d/%m/%Y") }} - {{ avance.mode_reglement_libelle }}</span>
+                            <strong class="text-slate-950">{{ "%.2f"|format(avance.montant) }} MAD</strong>
+                        </div>
+                        {% if avance.reference or avance.notes %}
+                        <p class="mt-1 text-xs text-slate-500">{{ avance.reference }} {{ avance.notes }}</p>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+            {% if not dossier.facture %}
+            <form class="mt-4 grid gap-2" method="post" action="{{ url_for('dossiers.nouvelle_avance_client', dossier_id=dossier.id) }}">
+                <input class="h-10 rounded-md border border-slate-300 px-3 text-sm" type="date" name="date" required>
+                <input class="h-10 rounded-md border border-slate-300 px-3 text-sm" type="number" min="0.01" step="0.01" name="montant" placeholder="Montant MAD" required>
+                <select class="h-10 rounded-md border border-slate-300 px-3 text-sm" name="mode_reglement">
+                    <option value="especes">Espèces</option>
+                    <option value="cheque">Chèque</option>
+                    <option value="virement">Virement</option>
+                    <option value="carte">Carte</option>
+                    <option value="autre">Autre</option>
+                </select>
+                <input class="h-10 rounded-md border border-slate-300 px-3 text-sm" name="reference" placeholder="Référence">
+                <button class="h-10 rounded-md bg-monster-jaune px-3 text-xs font-black text-black" type="submit">Enregistrer avance</button>
+            </form>
+            {% endif %}
+        </section>
+
+        <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <h3 class="text-sm font-black text-slate-950">Attestation d'immobilisation</h3>
+            <form class="mt-3 grid gap-2" method="get">
+                <label class="grid gap-1 text-xs font-bold text-slate-700">
+                    Jours de réparation
+                    <input class="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm" type="number" name="jours_reparation" min="1" max="365" value="7" required>
+                </label>
+                <div class="grid grid-cols-2 gap-2">
+                    <button class="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-xs font-black uppercase text-slate-600 hover:bg-slate-50" type="submit" formaction="{{ url_for('dossiers.attestation_immobilisation_pdf', dossier_id=dossier.id) }}">PDF</button>
+                    <button class="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-xs font-black uppercase text-slate-600 hover:bg-slate-50" type="submit" formaction="{{ url_for('dossiers.attestation_immobilisation_docx', dossier_id=dossier.id) }}">Word</button>
+                </div>
+            </form>
         </section>
     </aside>
 
@@ -171,7 +220,9 @@
                     </div>
                     <div class="min-w-0">
                         <h3 class="text-sm font-black text-slate-950">Devis</h3>
-                        {% if dossier.dernier_devis and dossier.dernier_devis.statut == 'rejected' %}
+                        {% if dossier.dernier_devis and dossier.dernier_devis.statut == 'rejected' and dossier.dernier_devis.est_complementaire and dossier.statut == 'in_progress' %}
+                        <p class="mt-0.5 text-xs leading-5 text-slate-600">Dernier complémentaire refusé. Les travaux déjà approuvés peuvent continuer.</p>
+                        {% elif dossier.dernier_devis and dossier.dernier_devis.statut == 'rejected' %}
                         <p class="mt-0.5 text-xs leading-5 text-slate-600">Dernier devis refusé. Créez une version corrigée pour relancer l'accord client.</p>
                         {% elif dossier.dernier_devis %}
                         <p class="mt-0.5 text-xs leading-5 text-slate-600">Dernier devis : v{{ dossier.dernier_devis.version }} - {{ dossier.dernier_devis.statut_libelle }} - {{ "%.2f"|format(dossier.dernier_devis.montant_ttc) }} MAD TTC.</p>
@@ -182,13 +233,20 @@
                     <div class="self-center">
                         {% if dossier.statut == 'pending_devis' and dossier.dernier_devis and dossier.dernier_devis.statut == 'rejected' %}
                         <a class="inline-flex h-9 w-full items-center justify-center rounded-md bg-monster-jaune px-3 text-xs font-black text-black" href="{{ url_for('dossiers.nouveau_devis', dossier_id=dossier.id) }}">Créer version corrigée</a>
-                        {% elif dossier.statut in ['pending_devis', 'paused_pending_approval'] %}
+                        {% elif dossier.statut == 'paused_pending_approval' %}
+                        <a class="inline-flex h-9 w-full items-center justify-center rounded-md bg-monster-jaune px-3 text-xs font-black text-black" href="{{ url_for('dossiers.nouveau_devis', dossier_id=dossier.id, mode_devis='remplacement') }}">Modifier le devis</a>
+                        <a class="mt-2 inline-flex h-8 w-full items-center justify-center rounded-md border border-slate-300 bg-white px-3 text-[10px] font-black uppercase text-slate-600 hover:bg-slate-50" href="{{ url_for('dossiers.nouveau_devis', dossier_id=dossier.id, mode_devis='complementaire') }}">Complémentaire</a>
+                        {% elif dossier.statut == 'pending_devis' %}
                         <a class="inline-flex h-9 w-full items-center justify-center rounded-md bg-monster-jaune px-3 text-xs font-black text-black" href="{{ url_for('dossiers.nouveau_devis', dossier_id=dossier.id) }}">Créer un devis</a>
                         {% else %}
                         <span class="inline-flex w-full items-center justify-center rounded-md bg-slate-100 px-3 py-2 text-[10px] font-black uppercase text-slate-500">Étape traitée</span>
                         {% endif %}
                         {% if dossier.dernier_devis %}
                         <div class="mt-2 grid grid-cols-2 gap-2">
+                            {% if dossier.dernier_devis.statut == 'pending' %}
+                            <a class="inline-flex h-8 items-center justify-center rounded-md border border-yellow-300 bg-yellow-50 px-2 text-[10px] font-black uppercase text-slate-700 hover:bg-yellow-100" href="{{ url_for('dossiers.modifier', devis_id=dossier.dernier_devis.id) }}">Modifier</a>
+                            {% endif %}
+                            <a class="inline-flex h-8 items-center justify-center rounded-md border border-slate-200 bg-white px-2 text-[10px] font-black uppercase text-slate-600 hover:bg-slate-50" href="{{ url_for('dossiers.imprimer_devis', devis_id=dossier.dernier_devis.id) }}" target="_blank" rel="noopener">Imprimer</a>
                             <a class="inline-flex h-8 items-center justify-center rounded-md border border-slate-200 bg-white px-2 text-[10px] font-black uppercase text-slate-600 hover:bg-slate-50" href="{{ url_for('dossiers.voir_devis_pdf', devis_id=dossier.dernier_devis.id) }}" target="_blank" rel="noopener">Voir PDF</a>
                             <a class="inline-flex h-8 items-center justify-center rounded-md border border-slate-200 bg-white px-2 text-[10px] font-black uppercase text-slate-600 hover:bg-slate-50" href="{{ url_for('dossiers.telecharger_devis', devis_id=dossier.dernier_devis.id) }}">Exporter</a>
                         </div>
@@ -254,7 +312,7 @@
                         {% elif dossier.statut == 'in_progress' %}
                         <p class="mt-0.5 text-xs leading-5 text-slate-600">La réparation est en cours. Mettez en pause si un coût supplémentaire apparaît, ou terminez le dossier.</p>
                         {% elif dossier.statut == 'paused_pending_approval' %}
-                        <p class="mt-0.5 text-xs leading-5 text-slate-600">Réparation en pause : un devis complémentaire est nécessaire.</p>
+                        <p class="mt-0.5 text-xs leading-5 text-slate-600">Réparation en pause : modifiez le devis ou créez un complémentaire.</p>
                         {% else %}
                         <p class="mt-0.5 text-xs leading-5 text-slate-600">Cette étape démarre après l'accord client.</p>
                         {% endif %}
@@ -386,11 +444,12 @@
                             <div class="flex items-start justify-between gap-4">
                                 <div>
                                     <h3 class="font-black text-slate-950">v{{ devis.version }} - {{ devis.objet }}</h3>
-                                    <p class="text-sm font-semibold text-slate-500">{{ devis.statut_libelle }}</p>
+                                    <p class="text-sm font-semibold text-slate-500">{{ devis.statut_libelle }} - {{ devis.type_libelle }}</p>
                                 </div>
                                 <div class="grid gap-2 text-right">
                                     <strong class="text-lg font-black text-slate-950">{{ "%.2f"|format(devis.montant_ttc) }} MAD</strong>
                                     <a class="inline-flex h-9 items-center justify-center rounded-md border border-slate-300 bg-white px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50" href="{{ url_for('dossiers.telecharger_devis', devis_id=devis.id) }}">Exporter Excel</a>
+                                    <a class="inline-flex h-9 items-center justify-center rounded-md border border-slate-300 bg-white px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50" href="{{ url_for('dossiers.imprimer_devis', devis_id=devis.id) }}" target="_blank" rel="noopener">Imprimer A4</a>
                                     <a class="inline-flex h-9 items-center justify-center rounded-md border border-slate-300 bg-white px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50" href="{{ url_for('dossiers.voir_devis_pdf', devis_id=devis.id) }}" target="_blank" rel="noopener">Voir PDF</a>
                                     <a class="inline-flex h-9 items-center justify-center rounded-md border border-slate-300 bg-white px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50" href="{{ url_for('dossiers.telecharger_devis_pdf', devis_id=devis.id) }}">Télécharger PDF</a>
                                 </div>

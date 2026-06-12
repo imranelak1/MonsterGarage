@@ -49,11 +49,11 @@ La page `Dossiers réparation` pilote le flux atelier réel :
 13. Le dossier passe en `En attente d'accord`.
 14. Seule la dernière version du devis peut être approuvée ou refusée.
 15. Après accord client, le dossier passe en `En réparation`.
-16. Si un coût supplémentaire apparaît, le dossier est mis en pause.
-17. Une nouvelle version de devis est créée en reprenant les lignes du dernier devis pour modification.
+16. Si un coût supplémentaire ou une correction apparaît, le dossier est mis en pause.
+17. Une nouvelle version complète peut reprendre les lignes du dernier devis pour modification, ou un devis complémentaire peut être créé uniquement pour les travaux ajoutés.
 18. Après refus d'un devis, le dossier revient en attente de devis avec deux actions claires : créer une version corrigée ou annuler le dossier.
 19. Quand les travaux sont terminés, le dossier passe en `Terminé`.
-20. La facture finale est générée uniquement depuis le dernier devis approuvé.
+20. La facture finale reprend la dernière version complète approuvée et les devis complémentaires approuvés après cette version.
 21. La facture suit ensuite son propre flux : `Émise`, `Livrée`, puis `Réglée`.
 
 La liste des dossiers atelier permet de rechercher par numéro de dossier, nom ou code client, marque, modèle, immatriculation ou demande client.

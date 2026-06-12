@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from flask import Blueprint, Response, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
@@ -13,15 +15,25 @@ from app.services.dossiers import (
     generer_numero_dossier,
     journaliser,
     mettre_en_pause,
+    modifier_devis,
     refuser_devis,
     rouvrir_garantie,
     terminer_dossier,
 )
 from app.services.dossiers_sntl import est_dossier_sntl
 from app.services.date_filters import appliquer_filtre_periode, periode_depuis_requete
+from app.services.devis_totaux import calculer_totaux_lignes, montant_ttc_ligne, taux_tva_ligne
+from app.services.attestation_immobilisation import (
+    DOCX_MIMETYPE,
+    exporter_attestation_docx,
+    exporter_attestation_pdf,
+    nom_fichier_attestation,
+)
 from app.services.export_documents import XLSX_MIMETYPE, exporter_devis_excel, nom_fichier_devis
-from app.services.export_pdf import PDF_MIMETYPE, exporter_devis_pdf, nom_fichier_devis_pdf
+from app.services.export_pdf import PDF_MIMETYPE, exporter_devis_pdf, montant_en_lettres, nom_fichier_devis_pdf
+from app.services.factures import enregistrer_avance_client
 from app.services.pagination import paginer
+from app.services.parametres import obtenir_entreprise
 from app.services.telephone import normaliser_telephone
 
 bp = Blueprint("dossiers", __name__, url_prefix="/dossiers")
@@ -167,6 +179,8 @@ def nouveau_devis(dossier_id):
                 objet=request.form.get("objet", ""),
                 lignes_formulaire=lignes,
                 notes=request.form.get("notes", ""),
+                est_complementaire=request.form.get("mode_devis") == "complementaire",
+                confirmer_remplacement_complements=bool(request.form.get("confirmer_remplacement_complements")),
             )
             db.session.commit()
             flash("Devis créé et envoyé en attente d'accord.", "success")
@@ -176,6 +190,38 @@ def nouveau_devis(dossier_id):
             flash(str(erreur), "danger")
 
     return render_template("dossiers/devis_formulaire.html", dossier=dossier)
+
+
+@bp.route("/devis/<int:devis_id>/modifier", methods=["GET", "POST"])
+@login_required
+def modifier(devis_id):
+    devis = db.session.get(DevisReparation, devis_id)
+    if not devis:
+        flash("Devis introuvable.", "warning")
+        return redirect(url_for("dossiers.liste"))
+
+    if devis.statut != "pending":
+        flash("Ce devis est déjà validé ou refusé. Créez une nouvelle version si une correction est nécessaire.", "warning")
+        endpoint = "sntl.detail" if est_dossier_sntl(devis.dossier) else "dossiers.detail"
+        return redirect(url_for(endpoint, dossier_id=devis.dossier_id))
+
+    if request.method == "POST":
+        try:
+            modifier_devis(
+                devis,
+                objet=request.form.get("objet", ""),
+                lignes_formulaire=_lignes_devis_depuis_formulaire(devis.dossier),
+                notes=request.form.get("notes", ""),
+            )
+            db.session.commit()
+            flash("Devis modifié.", "success")
+            endpoint = "sntl.detail" if est_dossier_sntl(devis.dossier) else "dossiers.detail"
+            return redirect(url_for(endpoint, dossier_id=devis.dossier_id))
+        except RegleMetierErreur as erreur:
+            db.session.rollback()
+            flash(str(erreur), "danger")
+
+    return render_template("dossiers/devis_formulaire.html", dossier=devis.dossier, devis_a_modifier=devis)
 
 
 @bp.route("/devis/<int:devis_id>/approuver", methods=["POST"])
@@ -210,12 +256,16 @@ def refuser(devis_id):
         return redirect(url_for("dossiers.liste"))
 
     try:
+        est_complementaire = devis.est_complementaire
         refuser_devis(devis, motif=request.form.get("motif_refus", ""))
         db.session.commit()
-        flash(
-            "Refus enregistré. Créez une version corrigée du devis ou annulez le dossier si le client ne souhaite pas continuer.",
-            "warning",
-        )
+        if est_complementaire and devis.dossier.statut == "in_progress":
+            flash("Complémentaire refusé. Le dossier reprend les travaux déjà approuvés.", "warning")
+        else:
+            flash(
+                "Refus enregistré. Créez une version corrigée du devis ou annulez le dossier si le client ne souhaite pas continuer.",
+                "warning",
+            )
     except RegleMetierErreur as erreur:
         db.session.rollback()
         flash(str(erreur), "danger")
@@ -240,6 +290,17 @@ def telecharger_devis(devis_id):
     )
 
 
+@bp.route("/devis/<int:devis_id>/impression")
+@login_required
+def imprimer_devis(devis_id):
+    devis = db.session.get(DevisReparation, devis_id)
+    if not devis:
+        flash("Devis introuvable.", "warning")
+        return redirect(url_for("dossiers.liste"))
+
+    return render_template("dossiers/devis_impression.html", **_contexte_devis_impression(devis))
+
+
 @bp.route("/devis/<int:devis_id>/pdf")
 @login_required
 def voir_devis_pdf(devis_id):
@@ -252,6 +313,18 @@ def telecharger_devis_pdf(devis_id):
     return _reponse_devis_pdf(devis_id, telechargement=True)
 
 
+@bp.route("/<int:dossier_id>/attestation-immobilisation/pdf")
+@login_required
+def attestation_immobilisation_pdf(dossier_id):
+    return _reponse_attestation_immobilisation(dossier_id, "pdf")
+
+
+@bp.route("/<int:dossier_id>/attestation-immobilisation/docx")
+@login_required
+def attestation_immobilisation_docx(dossier_id):
+    return _reponse_attestation_immobilisation(dossier_id, "docx")
+
+
 @bp.route("/<int:dossier_id>/pause", methods=["POST"])
 @login_required
 def pause(dossier_id):
@@ -262,7 +335,7 @@ def pause(dossier_id):
     try:
         mettre_en_pause(dossier, request.form.get("raison", ""))
         db.session.commit()
-        flash("Réparation mise en pause. Créez un nouveau devis pour l'accord complémentaire.", "warning")
+        flash("Réparation mise en pause. Modifiez le devis ou créez un complémentaire pour l'accord client.", "warning")
     except RegleMetierErreur as erreur:
         db.session.rollback()
         flash(str(erreur), "danger")
@@ -360,6 +433,31 @@ def ajouter_note(dossier_id):
     return redirect(url_for("dossiers.detail", dossier_id=dossier.id))
 
 
+@bp.route("/<int:dossier_id>/avances/nouvelle", methods=["POST"])
+@login_required
+def nouvelle_avance_client(dossier_id):
+    dossier = _obtenir_dossier(dossier_id)
+    if not dossier:
+        return redirect(url_for("dossiers.liste"))
+
+    try:
+        enregistrer_avance_client(
+            dossier,
+            date_valeur=request.form.get("date", ""),
+            montant=request.form.get("montant", ""),
+            mode_reglement=request.form.get("mode_reglement", "especes"),
+            reference=request.form.get("reference", ""),
+            notes=request.form.get("notes", ""),
+        )
+        db.session.commit()
+        flash("Avance client enregistrée.", "success")
+    except RegleMetierErreur as erreur:
+        db.session.rollback()
+        flash(str(erreur), "danger")
+
+    return redirect(url_for("dossiers.detail", dossier_id=dossier.id))
+
+
 def _obtenir_dossier(dossier_id: int):
     dossier = db.session.get(DossierReparation, dossier_id)
     if not dossier:
@@ -386,21 +484,123 @@ def _reponse_devis_pdf(devis_id: int, *, telechargement: bool):
     )
 
 
+def _contexte_devis_impression(devis: DevisReparation) -> dict:
+    lignes = list(devis.lignes)
+    type_client = devis.dossier.client.type
+    montant_ht, montant_tva, montant_ttc = calculer_totaux_lignes(lignes, type_client)
+    lignes_affichees = [
+        {
+            "designation": (ligne.designation or "").upper(),
+            "quantite": _format_nombre(ligne.quantite),
+            "etat": _etat_devis_impression(ligne),
+            "prix_unitaire_ht": _format_montant(ligne.prix_unitaire_ht),
+            "total_ht": _format_montant(ligne.total_ht),
+            "tva": f"{int((taux_tva_ligne(ligne, type_client) * 100).quantize(Decimal('1')))}%",
+            "total_ttc": _format_montant(montant_ttc_ligne(ligne, type_client)),
+        }
+        for ligne in lignes
+    ]
+    return {
+        "devis": devis,
+        "dossier": devis.dossier,
+        "client": devis.dossier.client,
+        "vehicule": devis.dossier.vehicule,
+        "entreprise": obtenir_entreprise(),
+        "lignes": lignes_affichees,
+        "lignes_vides": range(max(0, 10 - len(lignes_affichees))),
+        "show_etat": type_client != "sntl",
+        "numero_devis": f"{devis.dossier.numero}-V{devis.version}",
+        "montant_ht": _format_montant(montant_ht),
+        "montant_tva": _format_montant(montant_tva),
+        "montant_ttc": _format_montant(montant_ttc),
+        "montant_ttc_lettres": montant_en_lettres(montant_ttc),
+        "logo_url": url_for("static", filename="img/logo_monster_garage.png"),
+        "footer_adresse": "Quartier industriel, sidi ghanem N 534 Bis 2, Marrakech",
+    }
+
+
+def _etat_devis_impression(ligne) -> str:
+    if getattr(ligne, "type_ligne", None) == "main_oeuvre" or getattr(ligne, "etat_piece", None) == "mo":
+        return "MO"
+    if getattr(ligne, "etat_piece", None) == "occasion":
+        return "OCC"
+    if getattr(ligne, "etat_piece", None) == "autre":
+        return (getattr(ligne, "etat_piece_autre", "") or "AUTRE").upper()
+    return "NEUF"
+
+
+def _format_montant(value) -> str:
+    amount = Decimal(str(value or 0)).quantize(Decimal("0.01"))
+    return f"{amount:,.2f}".replace(",", " ").replace(".", ",")
+
+
+def _format_nombre(value) -> str:
+    amount = Decimal(str(value or 0)).quantize(Decimal("0.01")).normalize()
+    return f"{amount:f}"
+
+
+def _reponse_attestation_immobilisation(dossier_id: int, extension: str):
+    dossier = db.session.get(DossierReparation, dossier_id)
+    if not dossier:
+        flash("Dossier introuvable.", "warning")
+        return redirect(url_for("dossiers.liste"))
+
+    try:
+        jours_reparation = _jours_reparation_attestation()
+        if extension == "docx":
+            data = exporter_attestation_docx(dossier, jours_reparation=jours_reparation)
+            mimetype = DOCX_MIMETYPE
+        else:
+            data = exporter_attestation_pdf(dossier, jours_reparation=jours_reparation)
+            mimetype = PDF_MIMETYPE
+    except RegleMetierErreur as erreur:
+        flash(str(erreur), "danger")
+        endpoint = "sntl.detail" if est_dossier_sntl(dossier) else "dossiers.detail"
+        return redirect(url_for(endpoint, dossier_id=dossier.id))
+
+    filename = nom_fichier_attestation(dossier, extension)
+    return Response(
+        data,
+        mimetype=mimetype,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+def _jours_reparation_attestation() -> int:
+    valeur = (request.args.get("jours_reparation") or "7").strip()
+    try:
+        jours = int(valeur)
+    except ValueError:
+        raise RegleMetierErreur("Le nombre de jours de réparation doit être un nombre entier.") from None
+    if jours < 1 or jours > 365:
+        raise RegleMetierErreur("Le nombre de jours de réparation doit être compris entre 1 et 365.")
+    return jours
+
+
 def _lignes_devis_depuis_formulaire(dossier: DossierReparation) -> list[dict]:
     designations = request.form.getlist("designation")
     if designations:
         quantites = request.form.getlist("quantite")
         prix = request.form.getlist("prix_unitaire_ht")
         etats = request.form.getlist("etat_piece")
+        types_ligne = request.form.getlist("type_ligne")
+        etats_autres = request.form.getlist("etat_piece_autre")
+        types_mo = request.form.getlist("type_mo")
         lignes = []
         for index, designation in enumerate(designations):
             etat_piece = etats[index] if index < len(etats) else "neuf"
+            type_ligne = types_ligne[index] if index < len(types_ligne) else "piece"
+            if dossier.client.type == "sntl" and type_ligne != "main_oeuvre":
+                etat_piece = "neuf"
             lignes.append(
                 {
                     "designation": designation,
                     "quantite": quantites[index] if index < len(quantites) else "1",
                     "prix_unitaire_ht": prix[index] if index < len(prix) else "0",
+                    "type_ligne": type_ligne,
                     "etat_piece": etat_piece,
+                    "etat_piece_autre": etats_autres[index] if index < len(etats_autres) else "",
+                    "type_mo": types_mo[index] if index < len(types_mo) else "",
                 }
             )
         return lignes
@@ -412,7 +612,10 @@ def _lignes_devis_depuis_formulaire(dossier: DossierReparation) -> list[dict]:
                 "designation": request.form.get(f"designation_{index}", ""),
                 "quantite": request.form.get(f"quantite_{index}", "1"),
                 "prix_unitaire_ht": request.form.get(f"prix_unitaire_ht_{index}", "0"),
+                "type_ligne": request.form.get(f"type_ligne_{index}", "piece"),
                 "etat_piece": "neuf",
+                "etat_piece_autre": "",
+                "type_mo": request.form.get(f"type_mo_{index}", ""),
             }
         )
     return lignes

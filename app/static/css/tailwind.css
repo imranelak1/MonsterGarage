@@ -1624,6 +1624,10 @@ body {
   visibility: visible;
 }
 
+.collapse {
+  visibility: collapse;
+}
+
 .static {
   position: static;
 }
@@ -2076,6 +2080,10 @@ body {
 
 .shrink-0 {
   flex-shrink: 0;
+}
+
+.border-collapse {
+  border-collapse: collapse;
 }
 
 .origin-left {
@@ -3355,6 +3363,10 @@ body {
   color: rgb(82 82 91 / var(--tw-text-opacity, 1));
 }
 
+.underline {
+  text-decoration-line: underline;
+}
+
 .accent-yellow-400 {
   accent-color: #facc15;
 }
@@ -3968,6 +3980,10 @@ body {
 
   .md\:grid-cols-6 {
     grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .md\:grid-cols-\[150px_1fr_90px_120px_130px_140px_90px\] {
+    grid-template-columns: 150px 1fr 90px 120px 130px 140px 90px;
   }
 
   .md\:grid-cols-\[1fr_180px_160px\] {

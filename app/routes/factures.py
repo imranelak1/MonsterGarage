@@ -120,13 +120,36 @@ def releve_client(client_id):
 @bp.route("/clients/situation-financiere")
 @login_required
 def situation_financiere_clients():
+    return _situation_financiere_clients()
+
+
+@bp.route("/clients/situation-financiere/particuliers")
+@login_required
+def situation_financiere_particuliers():
+    return _situation_financiere_clients(type_client="particuliers")
+
+
+@bp.route("/clients/situation-financiere/sntl")
+@login_required
+def situation_financiere_sntl():
+    return _situation_financiere_clients(type_client="sntl")
+
+
+def _situation_financiere_clients(type_client: str | None = None):
     factures = (
         FactureReparation.query.join(FactureReparation.dossier)
         .join(DossierReparation.client)
         .filter(FactureReparation.statut != "annulee")
-        .order_by(Client.nom.asc(), FactureReparation.created_at.asc())
-        .all()
     )
+    if type_client == "sntl":
+        factures = factures.filter(Client.type == "sntl")
+        filename = "SITUATION_FINANCIERE_SNTL.xlsx"
+    elif type_client == "particuliers":
+        factures = factures.filter(Client.type != "sntl")
+        filename = "SITUATION_FINANCIERE_PARTICULIERS.xlsx"
+    else:
+        filename = "SITUATION_FINANCIERE_CLIENTS.xlsx"
+    factures = factures.order_by(Client.nom.asc(), FactureReparation.created_at.asc()).all()
     client_ids = []
     clients_par_id = {}
     for facture in factures:
@@ -140,7 +163,7 @@ def situation_financiere_clients():
     return Response(
         data,
         mimetype=XLSX_MIMETYPE,
-        headers={"Content-Disposition": 'attachment; filename="SITUATION_FINANCIERE_CLIENTS.xlsx"'},
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 

@@ -36,7 +36,7 @@ FONCTIONS_AUTORISEES = {
     "administratif",
     "autre",
 }
-TYPES_REMUNERATION_AUTORISES = {"salaire_fixe", "tache", "mixte"}
+TYPES_REMUNERATION_AUTORISES = {"salaire_fixe", "mensuelle", "tache", "mixte"}
 
 
 # ---------------------------------------------------------------------------
@@ -106,7 +106,7 @@ def payer_quinzaine(annee: int, mois: int):
 def calculer_soldes(annee: int, mois: int):
     employes = Employe.query.filter(
         Employe.actif == True,
-        Employe.type_remuneration.in_(["salaire_fixe", "mixte"]),
+        Employe.type_remuneration.in_(["salaire_fixe", "mixte", "mensuelle"]),
     ).all()
 
     # Jours travaillés transmis par formulaire (optionnel, pour prorata)
@@ -381,8 +381,12 @@ def nouvel_employe():
             return render_template("rh/formulaire_employe.html", employe=None)
 
         salaire_q = _float_ou_none(request.form.get("salaire_quinzaine"))
+        salaire_m = _float_ou_none(request.form.get("salaire_mensuel"))
         if type_remuneration in ("salaire_fixe", "mixte") and not salaire_q:
             flash("Le salaire quinzaine est obligatoire pour un employé à salaire fixe.", "danger")
+            return render_template("rh/formulaire_employe.html", employe=None)
+        if type_remuneration == "mensuelle" and not salaire_m:
+            flash("Le salaire mensuel est obligatoire pour un employé mensuel.", "danger")
             return render_template("rh/formulaire_employe.html", employe=None)
 
         employe = Employe(
@@ -394,6 +398,7 @@ def nouvel_employe():
             date_embauche=_date_ou_none(request.form.get("date_embauche")),
             type_remuneration=type_remuneration,
             salaire_quinzaine=salaire_q,
+            salaire_mensuel=salaire_m,
         )
         db.session.add(employe)
         db.session.commit()
@@ -467,8 +472,12 @@ def modifier_employe(employe_id: int):
             return render_template("rh/formulaire_employe.html", employe=employe)
 
         salaire_q = _float_ou_none(request.form.get("salaire_quinzaine"))
+        salaire_m = _float_ou_none(request.form.get("salaire_mensuel"))
         if type_remuneration in ("salaire_fixe", "mixte") and not salaire_q:
             flash("Le salaire quinzaine est obligatoire pour un employé à salaire fixe.", "danger")
+            return render_template("rh/formulaire_employe.html", employe=employe)
+        if type_remuneration == "mensuelle" and not salaire_m:
+            flash("Le salaire mensuel est obligatoire pour un employé mensuel.", "danger")
             return render_template("rh/formulaire_employe.html", employe=employe)
 
         employe.nom_complet = nom
@@ -479,6 +488,7 @@ def modifier_employe(employe_id: int):
         employe.date_embauche = _date_ou_none(request.form.get("date_embauche"))
         employe.type_remuneration = type_remuneration
         employe.salaire_quinzaine = salaire_q
+        employe.salaire_mensuel = salaire_m
         employe.actif = request.form.get("actif") == "1"
 
         db.session.commit()

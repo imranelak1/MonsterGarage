@@ -1,5 +1,7 @@
 from datetime import date, datetime, timedelta, timezone
 from io import BytesIO
+from zipfile import ZipFile
+from xml.etree import ElementTree as ET
 
 from openpyxl import Workbook, load_workbook
 import pytest
@@ -270,11 +272,14 @@ def test_module_ca_reserve_au_gerant(client):
 
 def test_gerant_saisit_ca_manuel_et_dashboard_utilise_total_mois(client, app):
     connecter(client)
+    aujourd_hui = date.today()
+    debut_mois = aujourd_hui.replace(day=1)
+    fin_mois = (debut_mois.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
 
     response = client.post(
         "/ca/",
         data={
-            "date": "2026-05-30",
+            "date": aujourd_hui.isoformat(),
             "montant": "12500,50",
             "source": "atelier",
             "libelle": "CA journalier atelier",
@@ -289,7 +294,7 @@ def test_gerant_saisit_ca_manuel_et_dashboard_utilise_total_mois(client, app):
         assert str(entree.montant) == "12500.50"
         assert entree.source == "atelier"
 
-    liste = client.get("/ca/?date_debut=2026-05-01&date_fin=2026-05-31")
+    liste = client.get(f"/ca/?date_debut={debut_mois.isoformat()}&date_fin={fin_mois.isoformat()}")
     assert liste.status_code == 200
     assert b"CA journalier atelier" in liste.data
     assert b"12500.50 MAD" in liste.data
@@ -1106,7 +1111,8 @@ def test_devis_lignes_dynamiques_et_piece_occasion(client, app):
         devis = db.session.get(DossierReparation, dossier_id).dernier_devis
         assert len(devis.lignes) == 2
         assert devis.lignes[0].etat_piece == "occasion"
-        assert str(devis.montant_ttc) == "1440.00"
+        assert str(devis.montant_tva) == "100.00"
+        assert str(devis.montant_ttc) == "1300.00"
 
 
 def test_formulaire_devis_propose_ajout_main_oeuvre(client, app):
@@ -1235,7 +1241,7 @@ def test_boucle_devis_complementaire_et_blocage_ancienne_version(client, app):
         assert dossier.statut == "pending_approval"
 
 
-def test_nouvelle_version_devis_reprend_anciennes_lignes(client, app):
+def test_devis_complementaire_ne_reprend_pas_anciennes_lignes(client, app):
     connecter(client)
     client_id, vehicule_id = creer_client_vehicule(app)
     client.post(
@@ -1254,11 +1260,37 @@ def test_nouvelle_version_devis_reprend_anciennes_lignes(client, app):
     client.post(f"/dossiers/devis/{devis_id}/approuver", data={"mode_accord": "presentiel"})
     client.post(f"/dossiers/{dossier_id}/pause", data={"raison": "Filtre supplémentaire"})
 
+    response = client.get(f"/dossiers/{dossier_id}/devis/nouveau?mode_devis=complementaire")
+
+    assert response.status_code == 200
+    assert "Devis complémentaire".encode() in response.data
+    assert "Vidange spéciale".encode() not in response.data
+
+
+def test_modification_devis_approuve_reprend_les_lignes_sans_complement(client, app):
+    connecter(client)
+    client_id, vehicule_id = creer_client_vehicule(app)
+    client.post(
+        "/dossiers/nouveau",
+        data={"mode_client": "existant", "mode_vehicule": "existant", "client_id": client_id, "vehicule_id": vehicule_id, "demande_client": "Revision", "diagnostic_initial": "", "kilometrage_entree": "", "notes": ""},
+    )
+    with app.app_context():
+        dossier_id = DossierReparation.query.first().id
+
+    client.post(
+        f"/dossiers/{dossier_id}/devis/nouveau",
+        data={"objet": "Revision initiale", "designation": ["Vidange speciale"], "quantite": ["1"], "prix_unitaire_ht": ["400"], "etat_piece": ["neuf"]},
+    )
+    with app.app_context():
+        devis_id = DossierReparation.query.first().dernier_devis.id
+    client.post(f"/dossiers/devis/{devis_id}/approuver", data={"mode_accord": "presentiel"})
+    client.post(f"/dossiers/{dossier_id}/pause", data={"raison": "Correction devis"})
+
     response = client.get(f"/dossiers/{dossier_id}/devis/nouveau")
 
     assert response.status_code == 200
-    assert "Les lignes du devis v1 sont reprises".encode() in response.data
-    assert "Vidange spéciale".encode() in response.data
+    assert "Version complète".encode() in response.data
+    assert "Vidange speciale".encode() in response.data
 
 
 def test_refus_devis_affiche_action_suivante(client, app):
@@ -1327,6 +1359,215 @@ def test_facture_finale_generee_depuis_dernier_devis_approuve(client, app):
         assert facture.statut == "emise"
         assert str(facture.montant_ttc) == "240.00"
         assert facture.devis_id == dossier.dernier_devis_approuve.id
+
+
+def test_facture_additionne_devis_initial_et_complementaire(client, app):
+    connecter(client)
+    client_id, vehicule_id = creer_client_vehicule(app)
+    client.post(
+        "/dossiers/nouveau",
+        data={"mode_client": "existant", "mode_vehicule": "existant", "client_id": client_id, "vehicule_id": vehicule_id, "demande_client": "Travaux avec complement", "diagnostic_initial": "", "kilometrage_entree": "", "notes": ""},
+    )
+    with app.app_context():
+        dossier_id = DossierReparation.query.first().id
+
+    client.post(
+        f"/dossiers/{dossier_id}/devis/nouveau",
+        data={"objet": "Initial", "designation_1": "Diagnostic", "quantite_1": "1", "prix_unitaire_ht_1": "200"},
+    )
+    with app.app_context():
+        devis_v1_id = db.session.get(DossierReparation, dossier_id).dernier_devis.id
+    client.post(f"/dossiers/devis/{devis_v1_id}/approuver", data={"mode_accord": "telephone"})
+    client.post(f"/dossiers/{dossier_id}/pause", data={"raison": "Piece supplementaire"})
+    client.post(
+        f"/dossiers/{dossier_id}/devis/nouveau",
+        data={"mode_devis": "complementaire", "objet": "Complementaire", "designation_1": "Piece complementaire", "quantite_1": "1", "prix_unitaire_ht_1": "300"},
+    )
+    with app.app_context():
+        devis_v2_id = db.session.get(DossierReparation, dossier_id).dernier_devis.id
+    client.post(f"/dossiers/devis/{devis_v2_id}/approuver", data={"mode_accord": "telephone"})
+    client.post(f"/dossiers/{dossier_id}/terminer")
+    client.post(f"/factures/dossiers/{dossier_id}/generer")
+
+    with app.app_context():
+        facture = FactureReparation.query.first()
+        assert str(facture.montant_ht) == "500.00"
+        assert str(facture.montant_tva) == "100.00"
+        assert str(facture.montant_ttc) == "600.00"
+        assert len(facture.devis_facturables) == 2
+        assert len(facture.lignes_facture) == 2
+
+
+def test_version_complete_avertit_et_demande_confirmation_si_complements_approuves(client, app):
+    connecter(client)
+    client_id, vehicule_id = creer_client_vehicule(app)
+    client.post(
+        "/dossiers/nouveau",
+        data={"mode_client": "existant", "mode_vehicule": "existant", "client_id": client_id, "vehicule_id": vehicule_id, "demande_client": "Travaux avec remplacement", "diagnostic_initial": "", "kilometrage_entree": "", "notes": ""},
+    )
+    with app.app_context():
+        dossier_id = DossierReparation.query.first().id
+
+    client.post(
+        f"/dossiers/{dossier_id}/devis/nouveau",
+        data={"objet": "Initial", "designation_1": "Diagnostic", "quantite_1": "1", "prix_unitaire_ht_1": "200"},
+    )
+    with app.app_context():
+        devis_v1_id = db.session.get(DossierReparation, dossier_id).dernier_devis.id
+    client.post(f"/dossiers/devis/{devis_v1_id}/approuver", data={"mode_accord": "telephone"})
+    client.post(f"/dossiers/{dossier_id}/pause", data={"raison": "Piece supplementaire"})
+    client.post(
+        f"/dossiers/{dossier_id}/devis/nouveau",
+        data={"mode_devis": "complementaire", "objet": "Complementaire", "designation_1": "Piece complementaire", "quantite_1": "1", "prix_unitaire_ht_1": "300"},
+    )
+    with app.app_context():
+        devis_v2_id = db.session.get(DossierReparation, dossier_id).dernier_devis.id
+    client.post(f"/dossiers/devis/{devis_v2_id}/approuver", data={"mode_accord": "telephone"})
+    client.post(f"/dossiers/{dossier_id}/pause", data={"raison": "Remplacement global"})
+
+    page = client.get(f"/dossiers/{dossier_id}/devis/nouveau?mode_devis=remplacement")
+    assert page.status_code == 200
+    assert "Attention".encode() in page.data
+    assert b"v2" in page.data
+
+    response = client.post(
+        f"/dossiers/{dossier_id}/devis/nouveau",
+        data={"mode_devis": "remplacement", "objet": "Remplacement", "designation_1": "Forfait global", "quantite_1": "1", "prix_unitaire_ht_1": "1100"},
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert b"Confirmez le remplacement" in response.data
+    with app.app_context():
+        dossier = db.session.get(DossierReparation, dossier_id)
+        assert dossier.dernier_devis.id == devis_v2_id
+
+    response = client.post(
+        f"/dossiers/{dossier_id}/devis/nouveau",
+        data={
+            "mode_devis": "remplacement",
+            "confirmer_remplacement_complements": "1",
+            "objet": "Remplacement",
+            "designation_1": "Forfait global",
+            "quantite_1": "1",
+            "prix_unitaire_ht_1": "1100",
+        },
+    )
+
+    assert response.status_code == 302
+    with app.app_context():
+        dossier = db.session.get(DossierReparation, dossier_id)
+        assert dossier.dernier_devis.version == 3
+        assert dossier.dernier_devis.statut == "pending"
+        assert dossier.dernier_devis.est_complementaire is False
+
+
+def test_refus_devis_complementaire_reprend_reparation_sans_facturer_complement(client, app):
+    connecter(client)
+    client_id, vehicule_id = creer_client_vehicule(app)
+    client.post(
+        "/dossiers/nouveau",
+        data={"mode_client": "existant", "mode_vehicule": "existant", "client_id": client_id, "vehicule_id": vehicule_id, "demande_client": "Travaux avec complement refuse", "diagnostic_initial": "", "kilometrage_entree": "", "notes": ""},
+    )
+    with app.app_context():
+        dossier_id = DossierReparation.query.first().id
+
+    client.post(
+        f"/dossiers/{dossier_id}/devis/nouveau",
+        data={"objet": "Initial", "designation_1": "Diagnostic", "quantite_1": "1", "prix_unitaire_ht_1": "200"},
+    )
+    with app.app_context():
+        devis_v1_id = db.session.get(DossierReparation, dossier_id).dernier_devis.id
+    client.post(f"/dossiers/devis/{devis_v1_id}/approuver", data={"mode_accord": "telephone"})
+    client.post(f"/dossiers/{dossier_id}/pause", data={"raison": "Piece supplementaire"})
+    client.post(
+        f"/dossiers/{dossier_id}/devis/nouveau",
+        data={"mode_devis": "complementaire", "objet": "Complement refuse", "designation_1": "Piece refusee", "quantite_1": "1", "prix_unitaire_ht_1": "300"},
+    )
+    with app.app_context():
+        devis_v2_id = db.session.get(DossierReparation, dossier_id).dernier_devis.id
+
+    response = client.post(
+        f"/dossiers/devis/{devis_v2_id}/refuser",
+        data={"motif_refus": "Client refuse le supplement"},
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert "travaux d".encode() in response.data
+    with app.app_context():
+        dossier = db.session.get(DossierReparation, dossier_id)
+        devis_v2 = db.session.get(DevisReparation, devis_v2_id)
+        assert dossier.statut == "in_progress"
+        assert devis_v2.statut == "rejected"
+        assert devis_v2.est_complementaire is True
+
+    client.post(f"/dossiers/{dossier_id}/terminer")
+    client.post(f"/factures/dossiers/{dossier_id}/generer")
+
+    with app.app_context():
+        facture = FactureReparation.query.first()
+        assert facture.devis_id == devis_v1_id
+        assert str(facture.montant_ht) == "200.00"
+        assert str(facture.montant_tva) == "40.00"
+        assert str(facture.montant_ttc) == "240.00"
+        assert len(facture.devis_facturables) == 1
+
+
+def test_facture_remplacement_devis_n_additionne_pas_l_ancien(client, app):
+    connecter(client)
+    client_id, vehicule_id = creer_client_vehicule(app)
+    client.post(
+        "/dossiers/nouveau",
+        data={"mode_client": "existant", "mode_vehicule": "existant", "client_id": client_id, "vehicule_id": vehicule_id, "demande_client": "Travaux modifies", "diagnostic_initial": "", "kilometrage_entree": "", "notes": ""},
+    )
+    with app.app_context():
+        dossier_id = DossierReparation.query.first().id
+
+    client.post(
+        f"/dossiers/{dossier_id}/devis/nouveau",
+        data={"objet": "Initial", "designation_1": "Diagnostic", "quantite_1": "1", "prix_unitaire_ht_1": "200"},
+    )
+    with app.app_context():
+        devis_v1_id = db.session.get(DossierReparation, dossier_id).dernier_devis.id
+    client.post(f"/dossiers/devis/{devis_v1_id}/approuver", data={"mode_accord": "telephone"})
+    client.post(f"/dossiers/{dossier_id}/pause", data={"raison": "Correction globale"})
+    client.post(
+        f"/dossiers/{dossier_id}/devis/nouveau",
+        data={"mode_devis": "remplacement", "objet": "Modifie", "designation_1": "Diagnostic complet", "quantite_1": "1", "prix_unitaire_ht_1": "300"},
+    )
+    with app.app_context():
+        devis_v2_id = db.session.get(DossierReparation, dossier_id).dernier_devis.id
+    client.post(f"/dossiers/devis/{devis_v2_id}/approuver", data={"mode_accord": "telephone"})
+    client.post(f"/dossiers/{dossier_id}/terminer")
+    client.post(f"/factures/dossiers/{dossier_id}/generer")
+
+    with app.app_context():
+        facture = FactureReparation.query.first()
+        assert str(facture.montant_ht) == "300.00"
+        assert str(facture.montant_tva) == "60.00"
+        assert str(facture.montant_ttc) == "360.00"
+        assert len(facture.devis_facturables) == 1
+        assert len(facture.lignes_facture) == 1
+
+
+def test_avance_client_avant_reparation_est_deduite_de_la_facture(client, app):
+    connecter(client)
+    dossier_id = creer_dossier_termine(client, app)
+
+    response = client.post(
+        f"/dossiers/{dossier_id}/avances/nouvelle",
+        data={"date": "2026-05-20", "montant": "100", "mode_reglement": "especes", "reference": "AV-001"},
+    )
+    assert response.status_code == 302
+    client.post(f"/factures/dossiers/{dossier_id}/generer")
+
+    with app.app_context():
+        facture = FactureReparation.query.first()
+        assert str(facture.montant_ttc) == "240.00"
+        assert str(facture.montant_regle) == "100.00"
+        assert str(facture.montant_avances_client) == "100.00"
+        assert str(facture.montant_restant) == "140.00"
 
 
 def test_facture_ne_peut_pas_etre_generee_avant_fin_reparation(client, app):
@@ -1573,18 +1814,25 @@ def test_export_devis_excel_depuis_dossier(client, app):
     wb = load_workbook(BytesIO(response.data), data_only=False)
     assert_classeur_sans_sntl(wb)
     ws = wb.active
-    assert ws["C1"].value == "MONSTER GARAGE"
-    assert ws["C4"].value == "DEVIS DE REPARATION"
-    assert ws["G4"].value.endswith("-V1")
+    assert ws["A1"].value == "MONSTER GARAGE"
+    assert ws["B6"].value.endswith("-V1")
     assert ws.freeze_panes is None
-    assert ws["E22"].value == 1
-    assert ws["E22"].number_format == "0.##"
-    assert ws["F22"].value == 200
-    assert ws["G22"].value == 200
+    assert ws["A12"].value == "Désignation"
+    assert ws["C12"].value == "Etat"
+    assert ws["F12"].value == "TVA"
+    assert ws["A13"].value == "CONTRÔLE FINAL"
+    assert ws["B13"].value == 1
+    assert ws["C13"].value == "NEUF"
+    assert ws["D13"].value == 200
+    assert ws["E13"].value == 200
+    assert ws["F13"].value == "20%"
+    assert ws["G13"].value == 240
+    assert ws["F24"].value == "Total HT"
     assert ws["G24"].value == 200
     assert ws["G25"].value == 40
     assert ws["G26"].value == 240
-    assert any(isinstance(cell.value, str) and "final" in cell.value for row in ws.iter_rows() for cell in row)
+    assert ws["A30"].value.startswith("Arrêté le présent devis")
+    assert any(isinstance(cell.value, str) and "FINAL" in cell.value for row in ws.iter_rows() for cell in row)
 
 
 def test_export_devis_pdf_vue_et_telechargement(client, app):
@@ -1602,12 +1850,52 @@ def test_export_devis_pdf_vue_et_telechargement(client, app):
     assert b"MONSTER GARAGE" in response.data
     assert b"SNTL" not in response.data
 
+    print_view = client.get(f"/dossiers/devis/{devis_id}/impression")
+    assert print_view.status_code == 200
+    assert b"@page" in print_view.data
+    assert b"MONSTER GARAGE" in print_view.data
+    assert "Arrêté le présent devis".encode() in print_view.data
+
     download = client.get(f"/dossiers/devis/{devis_id}/pdf/telecharger")
 
     assert download.status_code == 200
     assert download.mimetype == "application/pdf"
     assert download.headers["Content-Disposition"].startswith("attachment;")
     assert ".pdf" in download.headers["Content-Disposition"]
+
+
+def test_attestation_immobilisation_pdf_et_docx(client, app):
+    connecter(client)
+    client_id, vehicule_id = creer_client_vehicule(app)
+    client.post(
+        "/dossiers/nouveau",
+        data={"mode_client": "existant", "mode_vehicule": "existant", "client_id": client_id, "vehicule_id": vehicule_id, "demande_client": "Panne immobilisante", "diagnostic_initial": "", "kilometrage_entree": "", "notes": ""},
+    )
+    with app.app_context():
+        dossier_id = DossierReparation.query.first().id
+
+    pdf = client.get(f"/dossiers/{dossier_id}/attestation-immobilisation/pdf?jours_reparation=12")
+    docx = client.get(f"/dossiers/{dossier_id}/attestation-immobilisation/docx?jours_reparation=12")
+
+    assert pdf.status_code == 200
+    assert pdf.mimetype == "application/pdf"
+    assert pdf.data.startswith(b"%PDF")
+    assert docx.status_code == 200
+    assert docx.mimetype == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    assert docx.data.startswith(b"PK")
+    with ZipFile(BytesIO(docx.data)) as archive:
+        assert "word/header1.xml" in archive.namelist()
+        assert "word/footer1.xml" in archive.namelist()
+        assert "word/media/image1.jpeg" in archive.namelist()
+        document = ET.fromstring(archive.read("word/document.xml"))
+    textes = [
+        "".join(node.text or "" for node in paragraph.findall(".//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t"))
+        for paragraph in document.findall(".//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}p")
+    ]
+    texte = "\n".join(textes)
+    assert "ATTESTATION D’IMMOBILISATION" in texte
+    assert "12 Jours" in texte
+    assert "Toyota Hilux" in texte
 
 
 def test_export_facture_particulier_excel(client, app):
@@ -1720,30 +2008,30 @@ def test_export_facture_sntl_ajoute_commission(client, app):
     devis_ws = load_workbook(BytesIO(devis_response.data), data_only=False).active
     devis_values = [cell.value for row in devis_ws.iter_rows() for cell in row if cell.value is not None]
     assert devis_ws["A1"].value == "MONSTER GARAGE"
-    assert devis_ws["D11"].value == "Devis N°"
-    assert devis_ws["E11"].value.endswith("-V1")
-    assert devis_ws["C15"].value == "La Société Nationale des Transports et de la Logistique (SNTL)"
+    assert devis_ws["B6"].value.endswith("-V1")
+    assert devis_ws["A13"].value == "Désignation"
+    assert devis_ws["B13"].value == "Qté"
+    assert devis_ws["C13"].value == "Prix HT"
+    assert devis_ws["D13"].value == "Prix HT total"
+    assert devis_ws["E13"].value == "TVA"
+    assert devis_ws["F13"].value == "Total TTC"
     assert "ETAT" not in devis_values
-    assert devis_ws["B18"].value == "Partenaire"
-    assert devis_ws["D18"].value == "Véhicule"
-    assert devis_ws["C26"].value == "003524622000063"
-    assert devis_ws["E19"].value == "0207789 - J"
-    assert devis_ws["E23"].value == "260429000021"
-    assert devis_ws["E31"].value == "Quantité"
-    assert devis_ws["E32"].value == 1
-    assert devis_ws["C32"].value == "PLAQUETTE DE FREIN"
-    assert devis_ws["B42"].value == "Montant Total article HT"
-    assert devis_ws["G42"].value == 874.5
-    assert devis_ws["B43"].value == "Main d'œuvre*"
-    assert devis_ws["G43"].value == 125.5
+    assert devis_ws["F7"].value == "COMMUNE HARBIL"
+    assert devis_ws["A14"].value == "PLAQUETTE DE FREIN"
+    assert devis_ws["B14"].value == 1
+    assert devis_ws["C14"].value == 874.5
+    assert devis_ws["E14"].value == "20%"
+    assert devis_ws["F14"].value == 1049.4
+    assert devis_ws["A15"].value == "MAIN D'OEUVRE"
+    assert devis_ws["F25"].value == 1000
+    assert devis_ws["F26"].value == 200
+    assert devis_ws["F27"].value == 1200
     devis_pdf = client.get(f"/dossiers/devis/{devis_id}/pdf")
     assert devis_pdf.status_code == 200
     assert devis_pdf.data.startswith(b"%PDF")
-    assert b"Devis N" in devis_pdf.data
-    assert b"SNTL" in devis_pdf.data
-    assert b"Partenaire" in devis_pdf.data
-    assert b"Matricule" in devis_pdf.data
-    assert b"0207789 - J" in devis_pdf.data
+    assert b"Devis n" in devis_pdf.data
+    assert b"Prix HT total" in devis_pdf.data
+    assert b"PLAQUETTE DE FREIN" in devis_pdf.data
     assert b"ETAT" not in devis_pdf.data
     assert b"Commission SNTL" not in devis_pdf.data
     client.post(f"/sntl/devis/{devis_id}/approuver", data={"mode_accord": "telephone"})
@@ -1825,6 +2113,10 @@ def test_export_facture_sntl_ajoute_commission(client, app):
     assert releve_ws["E32"].value == 1200
     assert releve_ws["F32"].value == 120
     assert releve_ws["G32"].value == 1080
+    releve_values = load_workbook(BytesIO(releve_response.data), data_only=True).active
+    assert releve_values["E34"].value == 1200
+    assert releve_values["F34"].value == 120
+    assert releve_values["G34"].value == 1080
     situation_response = client.get("/factures/clients/situation-financiere")
     assert situation_response.status_code == 200
     situation_wb = load_workbook(BytesIO(situation_response.data), data_only=False)
@@ -1834,6 +2126,8 @@ def test_export_facture_sntl_ajoute_commission(client, app):
     assert sntl_sheet["D11"].value == "Relevé des Factures"
     assert sntl_sheet["F31"].value == "Commission SNTL"
     assert sntl_sheet["G32"].value == 1080
+    situation_values = load_workbook(BytesIO(situation_response.data), data_only=True)
+    assert situation_values[sntl_sheets[0]]["G34"].value == 1080
 
 
 def test_export_releve_client_excel(client, app):
@@ -1882,6 +2176,11 @@ def test_export_releve_client_excel(client, app):
     assert ws.freeze_panes is None
     assert ws["F10"].value == "=D10-E10"
     assert any(cell.value == "TOTAL" for row in ws.iter_rows() for cell in row)
+    values_wb = load_workbook(BytesIO(response.data), data_only=True)
+    values_ws = values_wb.active
+    assert values_ws["D13"].value == 600
+    assert values_ws["E13"].value == 0
+    assert values_ws["F13"].value == 600
     assert "RESUME VEHICULES" in wb.sheetnames
     resume = wb["RESUME VEHICULES"]
     assert resume["A7"].value == "VEHICULE"
@@ -1896,6 +2195,10 @@ def test_export_releve_client_excel(client, app):
     assert resume["C9"].value == 1
     assert resume["D9"].value == 360
     assert resume["F9"].value == 360
+    resume_values = values_wb["RESUME VEHICULES"]
+    assert resume_values["C11"].value == 2
+    assert resume_values["D11"].value == 600
+    assert resume_values["F11"].value == 600
 
     situation = client.get("/factures/clients/situation-financiere")
     assert situation.status_code == 200
@@ -1910,6 +2213,10 @@ def test_export_releve_client_excel(client, app):
     assert summary["D10"].value == 600
     assert summary["E10"].value == 0
     assert summary["F10"].value == 600
+    summary_values = load_workbook(BytesIO(situation.data), data_only=True)["SITUATION GLOBALE"]
+    assert summary_values["C12"].value == 2
+    assert summary_values["D12"].value == 600
+    assert summary_values["F12"].value == 600
     assert "SITUATION - Client Workflow" in situation_wb.sheetnames
 
 
@@ -2134,6 +2441,43 @@ def test_rh_solde_accepte_brut_solde_exceptionnel(app):
         assert str(salaire.salaire_brut) == "5000.00"
         assert str(salaire.total_avances) == "600.00"
         assert str(salaire.montant_net_paye) == "4400.00"
+
+
+def test_rh_mensuelle_paye_fin_mois_sans_quinzaine(app):
+    from app.services.calcul_salaire import enregistrer_quinzaine, enregistrer_solde_fin_mois
+
+    with app.app_context():
+        employe = Employe(
+            nom_complet="EMPLOYE MENSUEL",
+            fonction="administratif",
+            type_remuneration="mensuelle",
+            salaire_mensuel=5000,
+            actif=True,
+        )
+        db.session.add(employe)
+        db.session.flush()
+        db.session.add(
+            AvanceSalaire(
+                employe_id=employe.id,
+                date=date(2026, 5, 10),
+                montant=500,
+                type="avance",
+                quinzaine="premiere",
+                mois=5,
+                annee=2026,
+            )
+        )
+
+        with pytest.raises(Exception):
+            enregistrer_quinzaine(employe, 5, 2026)
+
+        salaire = enregistrer_solde_fin_mois(employe, 5, 2026)
+        db.session.commit()
+
+        assert salaire.type_paie == "fin_mois"
+        assert str(salaire.salaire_brut) == "5000.00"
+        assert str(salaire.total_avances) == "500.00"
+        assert str(salaire.montant_net_paye) == "4500.00"
 
 
 def test_rh_peut_regler_quinzaine_un_seul_employe(client, app):

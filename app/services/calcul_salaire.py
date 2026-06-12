@@ -45,6 +45,10 @@ def get_salaire_quinzaine(employe: Employe) -> Decimal:
     return Decimal(str(employe.salaire_quinzaine or 0))
 
 
+def get_salaire_mensuel(employe: Employe) -> Decimal:
+    return Decimal(str(employe.salaire_mensuel or 0))
+
+
 # ---------------------------------------------------------------------------
 # Lecture des avances depuis la base
 # ---------------------------------------------------------------------------
@@ -116,7 +120,7 @@ def calculer_quinzaine(employe: Employe, mois: int, annee: int) -> dict | None:
     Aucune déduction d'avances à cette étape (règle métier réelle).
     Retourne None pour les employés à la tâche.
     """
-    if employe.type_remuneration == "tache":
+    if employe.type_remuneration in {"tache", "mensuelle"}:
         return None
 
     brut = get_salaire_quinzaine(employe)
@@ -154,6 +158,27 @@ def calculer_solde_fin_mois(employe: Employe, mois: int, annee: int,
 
     jours_ouvrables = get_jours_ouvrables_quinzaine(mois, annee, quinzaine=2)
     dernier_jour = get_dernier_jour(mois, annee)
+
+    if employe.type_remuneration == "mensuelle":
+        brut = Decimal(str(brut_solde)) if brut_solde is not None else get_salaire_mensuel(employe)
+        avances = (
+            get_avances_deductibles(employe.id, mois, annee, quinzaine="premiere")
+            + get_avances_deductibles(employe.id, mois, annee, quinzaine="seconde")
+        )
+        return {
+            "employe_id": employe.id,
+            "type_paie": "fin_mois",
+            "date": date(annee, mois, dernier_jour),
+            "mois": mois,
+            "annee": annee,
+            "salaire_brut": brut,
+            "total_avances": avances,
+            "total_primes": Decimal("0"),
+            "montant_net_paye": brut - avances,
+            "jours_ouvrables": None,
+            "jours_travailles": None,
+            "taux_journalier": None,
+        }
 
     salaire_q = Decimal(str(brut_solde)) if brut_solde is not None else get_salaire_quinzaine(employe)
 
@@ -348,6 +373,8 @@ def get_recap_mensuel(mois: int, annee: int) -> list[dict]:
                 alertes.append("quinzaine_non_payee")
             if not solde_rec:
                 alertes.append("solde_fin_mois_non_paye")
+        elif emp.type_remuneration == "mensuelle" and not solde_rec:
+            alertes.append("solde_fin_mois_non_paye")
         if reste_du_total:
             alertes.append("reste_du")
 
@@ -401,7 +428,7 @@ def get_alertes_fin_mois(mois: int, annee: int) -> list[dict]:
     alertes = []
     employes_fixes = Employe.query.filter(
         Employe.actif == True,
-        Employe.type_remuneration.in_(["salaire_fixe", "mixte"]),
+        Employe.type_remuneration.in_(["salaire_fixe", "mixte", "mensuelle"]),
     ).all()
 
     for emp in employes_fixes:

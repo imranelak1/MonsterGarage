@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Devis {{ numero_devis }}</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 0;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            margin: 0;
+            min-height: 100%;
+            background: #e5e7eb;
+            color: #000;
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 10px;
+            line-height: 1.2;
+        }
+
+        .toolbar {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            padding: 14px;
+        }
+
+        .toolbar a,
+        .toolbar button {
+            height: 34px;
+            border: 1px solid #111827;
+            border-radius: 4px;
+            background: #fff;
+            color: #111827;
+            padding: 0 12px;
+            font: 700 12px Arial, Helvetica, sans-serif;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .page {
+            position: relative;
+            width: 210mm;
+            min-height: 297mm;
+            margin: 0 auto 18px;
+            padding: 18mm 18mm 16mm;
+            background: #fff;
+            box-shadow: 0 10px 28px rgba(15, 23, 42, 0.18);
+        }
+
+        .header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            border-bottom: 2px solid #777;
+            padding-bottom: 2mm;
+        }
+
+        .brand {
+            color: #3a87ad;
+            font-size: 32px;
+            font-style: italic;
+            font-weight: 700;
+            letter-spacing: 0;
+            line-height: 1;
+            text-decoration: underline;
+            text-transform: uppercase;
+        }
+
+        .logo {
+            width: 34mm;
+            height: auto;
+            object-fit: contain;
+            margin-right: 7mm;
+            margin-top: -1mm;
+        }
+
+        .meta {
+            display: flex;
+            justify-content: space-between;
+            gap: 22mm;
+            margin-top: 18mm;
+            width: 100%;
+        }
+
+        .meta-box {
+            width: 45%;
+            min-height: 24mm;
+            border: 1px solid #000;
+            border-radius: 8px;
+            padding: 3mm 3.5mm;
+        }
+
+        .meta-row {
+            display: grid;
+            grid-template-columns: 31mm 1fr;
+            align-items: baseline;
+            min-height: 4.1mm;
+        }
+
+        .meta-label {
+            color: #111;
+            font-size: 9px;
+        }
+
+        .meta-value {
+            color: #111;
+            font-size: 9px;
+            font-weight: 700;
+            overflow-wrap: anywhere;
+        }
+
+        .items {
+            width: 100%;
+            margin-top: 18px;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        .items th,
+        .items td {
+            height: 17px;
+            border: 1px solid #000;
+            padding: 2px 5px;
+            vertical-align: middle;
+        }
+
+        .items th {
+            background: #f7f7f7;
+            font-size: 10px;
+            font-weight: 700;
+            text-align: center;
+        }
+
+        .items td {
+            font-size: 9px;
+        }
+
+        .designation {
+            width: 38%;
+            text-align: left;
+        }
+
+        .qty {
+            width: 7%;
+            text-align: center;
+        }
+
+        .state {
+            width: 9%;
+            text-align: center;
+        }
+
+        .price,
+        .line-total,
+        .grand-total {
+            width: 14%;
+            text-align: right;
+        }
+
+        .tax {
+            width: 8%;
+            text-align: center;
+        }
+
+        .totals-wrap {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 8px;
+        }
+
+        .totals {
+            width: 44mm;
+            border-collapse: collapse;
+        }
+
+        .totals td {
+            height: 15px;
+            border: 1px solid #000;
+            padding: 2px 5px;
+            font-size: 9px;
+        }
+
+        .totals-label {
+            width: 18mm;
+            background: #f1f1f1;
+            font-weight: 700;
+        }
+
+        .totals-value {
+            text-align: right;
+        }
+
+        .legal {
+            margin-top: 18mm;
+            font-size: 9px;
+        }
+
+        .amount-words {
+            display: inline-block;
+            font-style: italic;
+            font-weight: 700;
+            text-decoration: underline;
+        }
+
+        .received {
+            margin-top: 5mm;
+            font-style: italic;
+        }
+
+        .signature {
+            display: flex;
+            justify-content: space-between;
+            min-height: 41mm;
+            margin-top: 16mm;
+        }
+
+        .stamp-space {
+            width: 48%;
+        }
+
+        .client-signature {
+            display: flex;
+            width: 34%;
+            flex-direction: column;
+            align-items: center;
+            gap: 11mm;
+            padding-top: 3mm;
+            font-size: 9px;
+        }
+
+        .footer {
+            position: absolute;
+            right: 18mm;
+            bottom: 14mm;
+            left: 18mm;
+            border-top: 2px solid #000;
+            padding-top: 3mm;
+            text-align: center;
+            font-size: 9px;
+            line-height: 1.25;
+        }
+
+        @media print {
+            html,
+            body {
+                background: #fff;
+            }
+
+            .toolbar {
+                display: none;
+            }
+
+            .page {
+                margin: 0;
+                box-shadow: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <button type="button" onclick="window.print()">Imprimer</button>
+        <a href="{{ url_for('dossiers.voir_devis_pdf', devis_id=devis.id) }}">Voir PDF</a>
+    </div>
+
+    <main class="page">
+        <header class="header">
+            <div class="brand">MONSTER GARAGE</div>
+            <img class="logo" src="{{ logo_url }}" alt="Monster Garage">
+        </header>
+
+        <section class="meta" aria-label="Informations devis">
+            <div class="meta-box">
+                <div class="meta-row"><span class="meta-label">Devis n° :</span><span class="meta-value">{{ numero_devis }}</span></div>
+                <div class="meta-row"><span class="meta-label">Date :</span><span class="meta-value">{{ devis.created_at.strftime("%d/%m/%Y") }}</span></div>
+                <div class="meta-row"><span class="meta-label">Véhicule :</span><span class="meta-value">{{ vehicule.marque }} {{ vehicule.modele }}</span></div>
+                <div class="meta-row"><span class="meta-label">Immatriculation :</span><span class="meta-value">{{ vehicule.immatriculation }}</span></div>
+                <div class="meta-row"><span class="meta-label">Kilométrage :</span><span class="meta-value">{{ dossier.kilometrage_entree or vehicule.kilometrage_actuel or "" }}</span></div>
+            </div>
+
+            <div class="meta-box">
+                <div class="meta-row"><span class="meta-label">N° client / Client :</span><span class="meta-value">{{ client.code }} / {{ client.administration_rattachee or client.nom }}</span></div>
+                <div class="meta-row"><span class="meta-label">ICE n° :</span><span class="meta-value">{{ client.ice or "" }}</span></div>
+                <div class="meta-row"><span class="meta-label">Adresse :</span><span class="meta-value">{{ client.adresse or client.ville or "" }}</span></div>
+            </div>
+        </section>
+
+        <table class="items">
+            <thead>
+                <tr>
+                    <th class="designation">Désignation</th>
+                    <th class="qty">Qté</th>
+                    {% if show_etat %}<th class="state">Etat</th>{% endif %}
+                    <th class="price">Prix HT</th>
+                    <th class="line-total">Prix HT total</th>
+                    <th class="tax">TVA</th>
+                    <th class="grand-total">Total TTC</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ligne in lignes %}
+                    <tr>
+                        <td class="designation">{{ ligne.designation }}</td>
+                        <td class="qty">{{ ligne.quantite }}</td>
+                        {% if show_etat %}<td class="state">{{ ligne.etat }}</td>{% endif %}
+                        <td class="price">{{ ligne.prix_unitaire_ht }}</td>
+                        <td class="line-total">{{ ligne.total_ht }}</td>
+                        <td class="tax">{{ ligne.tva }}</td>
+                        <td class="grand-total">{{ ligne.total_ttc }}</td>
+                    </tr>
+                {% endfor %}
+                {% for _ in lignes_vides %}
+                    <tr>
+                        <td class="designation">&nbsp;</td>
+                        <td class="qty"></td>
+                        {% if show_etat %}<td class="state"></td>{% endif %}
+                        <td class="price"></td>
+                        <td class="line-total"></td>
+                        <td class="tax"></td>
+                        <td class="grand-total"></td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="totals-wrap">
+            <table class="totals">
+                <tr><td class="totals-label">Total HT</td><td class="totals-value">{{ montant_ht }}MAD</td></tr>
+                <tr><td class="totals-label">TVA</td><td class="totals-value">{{ montant_tva }}MAD</td></tr>
+                <tr><td class="totals-label">Total TTC</td><td class="totals-value">{{ montant_ttc }}MAD</td></tr>
+            </table>
+        </div>
+
+        <section class="legal">
+            <div class="amount-words">Arrêté le présent devis à la somme de: {{ montant_ttc_lettres }} TTC</div>
+            <div class="received">Devis reçu avant l'exécution des travaux</div>
+        </section>
+
+        <section class="signature" aria-label="Signature">
+            <div class="stamp-space"></div>
+            <div class="client-signature">
+                <div>Date :</div>
+                <div>Bon pour accord</div>
+                <div>Signature client</div>
+            </div>
+        </section>
+
+        <footer class="footer">
+            <div>RC: {{ entreprise.rc }} / IF: {{ entreprise.if_fiscal }} / ICE: {{ entreprise.ice }} / Patente: {{ entreprise.patente }}</div>
+            <div>Adresse: {{ footer_adresse }}</div>
+            <div>Tél: {{ entreprise.telephones }} / E-mail : {{ entreprise.email }}</div>
+        </footer>
+    </main>
+</body>
+</html>

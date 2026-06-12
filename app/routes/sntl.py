@@ -21,7 +21,7 @@ from app.services.dossiers_sntl import (
     preset_sntl,
     requete_dossiers_sntl,
 )
-from app.services.factures import generer_facture
+from app.services.factures import enregistrer_avance_client, generer_facture
 from app.services.pagination import paginer
 from app.services.telephone import normaliser_telephone
 
@@ -194,6 +194,31 @@ def facturer(dossier_id):
         return redirect(url_for("sntl.detail", dossier_id=dossier.id))
 
 
+@bp.route("/<int:dossier_id>/avances/nouvelle", methods=["POST"])
+@login_required
+def nouvelle_avance_client(dossier_id):
+    dossier = _obtenir_dossier_sntl(dossier_id)
+    if not dossier:
+        return redirect(url_for("sntl.liste"))
+
+    try:
+        enregistrer_avance_client(
+            dossier,
+            date_valeur=request.form.get("date", ""),
+            montant=request.form.get("montant", ""),
+            mode_reglement=request.form.get("mode_reglement", "especes"),
+            reference=request.form.get("reference", ""),
+            notes=request.form.get("notes", ""),
+        )
+        db.session.commit()
+        flash("Avance client SNTL enregistrée.", "success")
+    except RegleMetierErreur as erreur:
+        db.session.rollback()
+        flash(str(erreur), "danger")
+
+    return redirect(url_for("sntl.detail", dossier_id=dossier.id))
+
+
 @bp.route("/releves")
 @login_required
 def releves():
@@ -358,22 +383,33 @@ def _lignes_devis_depuis_formulaire() -> list[dict]:
     if designations:
         quantites = request.form.getlist("quantite")
         prix = request.form.getlist("prix_unitaire_ht")
-        return [
-            {
-                "designation": designation,
-                "quantite": quantites[index] if index < len(quantites) else "1",
-                "prix_unitaire_ht": prix[index] if index < len(prix) else "0",
-                "etat_piece": forcer_piece_neuve(),
-            }
-            for index, designation in enumerate(designations)
-        ]
+        types_ligne = request.form.getlist("type_ligne")
+        types_mo = request.form.getlist("type_mo")
+        lignes = []
+        for index, designation in enumerate(designations):
+            type_ligne = types_ligne[index] if index < len(types_ligne) else "piece"
+            lignes.append(
+                {
+                    "designation": designation,
+                    "quantite": quantites[index] if index < len(quantites) else "1",
+                    "prix_unitaire_ht": prix[index] if index < len(prix) else "0",
+                    "type_ligne": type_ligne,
+                    "etat_piece": "mo" if type_ligne == "main_oeuvre" else forcer_piece_neuve(),
+                    "etat_piece_autre": "",
+                    "type_mo": types_mo[index] if index < len(types_mo) else "",
+                }
+            )
+        return lignes
 
     return [
         {
             "designation": request.form.get(f"designation_{index}", ""),
             "quantite": request.form.get(f"quantite_{index}", "1"),
             "prix_unitaire_ht": request.form.get(f"prix_unitaire_ht_{index}", "0"),
+            "type_ligne": request.form.get(f"type_ligne_{index}", "piece"),
             "etat_piece": forcer_piece_neuve(),
+            "etat_piece_autre": "",
+            "type_mo": request.form.get(f"type_mo_{index}", ""),
         }
         for index in range(1, 6)
     ]

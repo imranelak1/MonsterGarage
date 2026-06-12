@@ -1,0 +1,38 @@
+<div class="grid gap-3 rounded-md border border-slate-200 p-3 md:grid-cols-[150px_1fr_90px_120px_130px_140px_90px]" data-devis-line>
+    {% set type_ligne = ligne.type_ligne if ligne else 'piece' %}
+    {% set etat_piece = ligne.etat_piece if ligne else 'neuf' %}
+    {% set type_mo = ligne.type_mo if ligne and ligne.type_mo else 'mecanique' %}
+    <select class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="type_ligne">
+        <option value="piece" {% if type_ligne == 'piece' %}selected{% endif %}>Pièce</option>
+        <option value="main_oeuvre" {% if type_ligne == 'main_oeuvre' %}selected{% endif %}>M.O</option>
+        <option value="autre" {% if type_ligne == 'autre' %}selected{% endif %}>Autre</option>
+    </select>
+    <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="designation" value="{{ ligne.designation if ligne else '' }}" placeholder="Désignation">
+    <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" type="number" step="0.01" name="quantite" value="{{ ligne.quantite if ligne else 1 }}" placeholder="Qté">
+    <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" type="number" step="0.01" name="prix_unitaire_ht" value="{{ ligne.prix_unitaire_ht if ligne else '' }}" placeholder="Prix HT">
+
+    {% if is_sntl %}
+        <input type="hidden" name="etat_piece" value="{{ 'mo' if type_ligne == 'main_oeuvre' else 'neuf' }}">
+    {% else %}
+        <select class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="etat_piece">
+            <option value="neuf" {% if etat_piece == 'neuf' %}selected{% endif %}>Neuf</option>
+            <option value="occasion" {% if etat_piece == 'occasion' %}selected{% endif %}>Occasion</option>
+            <option value="mo" {% if etat_piece == 'mo' %}selected{% endif %}>M.O</option>
+            <option value="autre" {% if etat_piece == 'autre' %}selected{% endif %}>Autre</option>
+        </select>
+    {% endif %}
+
+    <div class="grid gap-2">
+        <select class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100 {% if type_ligne != 'main_oeuvre' %}hidden{% endif %}" name="type_mo" data-type-mo>
+            <option value="mecanique" {% if type_mo == 'mecanique' %}selected{% endif %}>Mécanique</option>
+            <option value="electricite" {% if type_mo == 'electricite' %}selected{% endif %}>Électricité</option>
+            <option value="tolerie" {% if type_mo == 'tolerie' %}selected{% endif %}>Tôlerie</option>
+            <option value="peinture" {% if type_mo == 'peinture' %}selected{% endif %}>Peinture</option>
+            <option value="diagnostic" {% if type_mo == 'diagnostic' %}selected{% endif %}>Diagnostic</option>
+            <option value="autre" {% if type_mo == 'autre' %}selected{% endif %}>Autre</option>
+        </select>
+        <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100 {% if etat_piece != 'autre' or type_ligne == 'main_oeuvre' %}hidden{% endif %}" name="etat_piece_autre" value="{{ ligne.etat_piece_autre if ligne else '' }}" placeholder="État autre" data-etat-autre>
+    </div>
+
+    <button class="h-11 rounded-md border border-red-200 bg-white px-3 text-sm font-black text-red-700" type="button" data-remove-line>Retirer</button>
+</div>

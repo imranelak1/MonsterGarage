@@ -2,11 +2,16 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
+from pathlib import Path
 import re
 import textwrap
+import zlib
+
+from PIL import Image
 
 from app.models import DevisReparation, FactureReparation
 from app.services.calculs_facturation import calculer_commission_sntl, param_percent
+from app.services.devis_totaux import calculer_totaux_lignes, montant_ttc_ligne, taux_tva_ligne
 from app.services.parametres import obtenir_entreprise
 
 
@@ -23,28 +28,17 @@ _LIGHT = (0.94, 0.96, 0.98)
 _SNTL_X = {2: 42, 3: 137, 4: 277, 5: 352, 6: 427, 7: 487}
 _SNTL_W = {2: 95, 3: 140, 4: 75, 5: 75, 6: 60, 7: 66}
 _SNTL_RIGHT = _SNTL_X[7] + _SNTL_W[7]
+_LOGO_PATH = Path(__file__).resolve().parent.parent / "static" / "img" / "logo_monster_garage.png"
+_MONSTER_BLUE = (0.23, 0.53, 0.68)
+_MUTED = (0.32, 0.32, 0.32)
 _SNTL_DESTINATION = "La Société Nationale des Transports et de la Logistique (SNTL)"
+_DEVIS_LEFT = 56
+_DEVIS_RIGHT = 500
+_DEVIS_FOOTER_ADDRESS = "Quartier industriel, sidi ghanem N 534 Bis 2, Marrakech"
 
 
 def exporter_devis_pdf(devis: DevisReparation) -> bytes:
-    if devis.dossier.client.type == "sntl":
-        return _build_sntl_document_pdf(
-            titre="DEVIS SNTL",
-            numero=f"{devis.dossier.numero}-V{devis.version}",
-            date_document=devis.created_at,
-            devis=devis,
-            include_commission=False,
-        )
-
-    titre = "DEVIS SNTL" if devis.dossier.client.type == "sntl" else "DEVIS DE REPARATION"
-    numero = f"{devis.dossier.numero}-V{devis.version}"
-    return _build_document_pdf(
-        titre=titre,
-        numero=numero,
-        date_document=devis.created_at,
-        devis=devis,
-        statut=devis.statut_libelle,
-    )
+    return _build_monster_devis_pdf(devis)
 
 
 def exporter_facture_pdf(facture: FactureReparation) -> bytes:
@@ -55,6 +49,10 @@ def exporter_facture_pdf(facture: FactureReparation) -> bytes:
             date_document=facture.created_at,
             devis=facture.devis,
             include_commission=True,
+            lignes=facture.lignes_facture,
+            montant_ht=facture.montant_ht,
+            montant_tva=facture.montant_tva,
+            montant_ttc=facture.montant_ttc,
         )
     elif facture.dossier.statut == "cancelled_billable":
         titre = "FACTURE TRAVAUX EFFECTUES"
@@ -67,6 +65,10 @@ def exporter_facture_pdf(facture: FactureReparation) -> bytes:
         date_document=facture.created_at,
         devis=facture.devis,
         statut=facture.statut_libelle,
+        lignes=facture.lignes_facture,
+        montant_ht=facture.montant_ht,
+        montant_tva=facture.montant_tva,
+        montant_ttc=facture.montant_ttc,
         montant_regle=facture.montant_regle,
     )
 
@@ -80,6 +82,291 @@ def nom_fichier_facture_pdf(facture: FactureReparation) -> str:
     return _safe_filename(f"{prefix}_{facture.numero}.pdf")
 
 
+def montant_en_lettres(amount) -> str:
+    return _capitalize(_amount_to_french(Decimal(str(amount or 0))))
+
+
+def _build_monster_devis_pdf(devis: DevisReparation) -> bytes:
+    pdf = _PdfDocument()
+    ctx = _PageContext(pdf)
+    is_sntl = devis.dossier.client.type == "sntl"
+    _draw_monster_devis_page(ctx, devis, is_sntl=is_sntl)
+    return pdf.render()
+
+
+def _draw_monster_devis_page(ctx: "_PageContext", devis: DevisReparation, *, is_sntl: bool) -> None:
+    lignes = list(devis.lignes)
+    client_type = devis.dossier.client.type
+    montant_ht, montant_tva, montant_ttc = calculer_totaux_lignes(lignes, client_type)
+
+    _draw_monster_devis_header(ctx)
+    if is_sntl:
+        table_top = _draw_monster_devis_info_sntl(ctx, devis)
+        table_columns = [
+            ("Désignation", 153),
+            ("Qté", 24),
+            ("Prix HT", 57),
+            ("Prix HT total", 69),
+            ("TVA", 39),
+            ("Total TTC", 74),
+        ]
+        table_x = _DEVIS_LEFT
+    else:
+        table_top = _draw_monster_devis_info_particulier(ctx, devis)
+        table_columns = [
+            ("Désignation", 159),
+            ("Qté", 25),
+            ("Etat", 36),
+            ("Prix HT", 61),
+            ("Prix HT total", 70),
+            ("TVA", 39),
+            ("Total TTC", 74),
+        ]
+        table_x = _DEVIS_LEFT
+
+    table_bottom = _draw_monster_devis_table(ctx, devis, table_x, table_top, table_columns, lignes, show_etat=not is_sntl)
+    totals_bottom = _draw_monster_devis_totals(ctx, table_x, table_columns, table_bottom - 8, montant_ht, montant_tva, montant_ttc)
+    phrase_y = min(totals_bottom - 36, 360 if not is_sntl else 342)
+    _draw_monster_devis_legal(ctx, devis, montant_ttc, phrase_y)
+    _draw_monster_devis_signature(ctx, y=248 if is_sntl else 262)
+    _draw_monster_devis_footer(ctx)
+
+
+def _draw_monster_devis_header(ctx: "_PageContext") -> None:
+    title_x = _DEVIS_LEFT + 5
+    title_y = 776
+    ctx.text(title_x, title_y, "MONSTER GARAGE", size=24, bold=True, italic=True, color=_MONSTER_BLUE)
+    ctx.line(title_x, title_y - 4, title_x + 244, title_y - 4, color=_MONSTER_BLUE, width=0.8)
+    ctx.image(_LOGO_PATH, 328, 762, 104, 49)
+    ctx.line(_DEVIS_LEFT, 756, _DEVIS_RIGHT, 756, color=(0.50, 0.50, 0.50), width=0.9)
+
+
+def _draw_monster_devis_info_sntl(ctx: "_PageContext", devis: DevisReparation) -> float:
+    dossier = devis.dossier
+    client = dossier.client
+    vehicule = dossier.vehicule
+    numero = _numero_devis_modele(devis)
+    date_doc = _format_date(devis.created_at)
+
+    left_rows = [
+        ("Devis n°", numero),
+        ("Date", date_doc),
+        ("Véhicule", f"{vehicule.marque} {vehicule.modele}".upper()),
+        ("Immatriculation", vehicule.immatriculation),
+        ("Kilométrage", dossier.kilometrage_entree or vehicule.kilometrage_actuel or ""),
+    ]
+    right_rows = [
+        ("N°client", client.code),
+        ("Client", (client.administration_rattachee or client.nom).upper()),
+        ("Adresse", client.adresse or client.ville or ""),
+    ]
+    _draw_monster_rounded_info_box(ctx, _DEVIS_LEFT, 673, 151, 72, left_rows)
+    _draw_monster_rounded_info_box(ctx, 262, 673, 161, 72, right_rows)
+    return 615
+
+
+def _draw_monster_devis_info_particulier(ctx: "_PageContext", devis: DevisReparation) -> float:
+    dossier = devis.dossier
+    client = dossier.client
+    vehicule = dossier.vehicule
+    left_rows = [
+        ("Devis n°", _numero_devis_modele(devis)),
+        ("Date", _format_date(devis.created_at)),
+        ("Véhicule", f"{vehicule.marque} {vehicule.modele}".upper()),
+        ("Immatriculation", vehicule.immatriculation),
+    ]
+    right_rows = [
+        ("Client", client.nom.upper()),
+        ("ICE n°", client.ice or ""),
+        ("Adresse", client.adresse or client.ville or ""),
+    ]
+    _draw_monster_info_lines(ctx, _DEVIS_LEFT + 7, 704, left_rows, label_width=58)
+    _draw_monster_info_lines(ctx, 306, 704, right_rows, label_width=56)
+    return 618
+
+
+def _draw_monster_rounded_info_box(ctx: "_PageContext", x: float, y: float, width: float, height: float, rows: list[tuple[str, object]]) -> None:
+    ctx.round_rect(x, y, width, height, 8, stroke=(0.25, 0.25, 0.25))
+    line_y = y + height - 15
+    for label, value in rows:
+        ctx.text(x + 7, line_y, f"{label} :", size=5.4, color=_BLACK)
+        ctx.text(x + 72, line_y, _display(value), size=5.2, bold=True, color=_BLACK)
+        line_y -= 11
+
+
+def _draw_monster_info_lines(ctx: "_PageContext", x: float, y: float, rows: list[tuple[str, object]], *, label_width: float) -> None:
+    line_y = y
+    for label, value in rows:
+        ctx.text(x, line_y, f"{label}:", size=6.0, color=_BLACK)
+        ctx.text(x + label_width, line_y, _display(value), size=5.8, bold=True, color=_BLACK)
+        line_y -= 12
+
+
+def _draw_monster_devis_table(
+    ctx: "_PageContext",
+    devis: DevisReparation,
+    x: float,
+    top: float,
+    columns: list[tuple[str, float]],
+    lignes: list,
+    *,
+    show_etat: bool,
+) -> float:
+    row_height = 13
+    header_height = 13
+    table_width = sum(width for _, width in columns)
+    y = top
+    col_x = [x]
+    for _, width in columns[:-1]:
+        col_x.append(col_x[-1] + width)
+
+    for (label, width), cell_x in zip(columns, col_x):
+        _draw_monster_cell(ctx, cell_x, y - header_height, width, header_height, label, size=5.8, bold=True, align="center")
+    y -= header_height
+
+    rows_count = max(10, len(lignes))
+    for index in range(rows_count):
+        ligne = lignes[index] if index < len(lignes) else None
+        values = _monster_devis_row_values(ligne, devis.dossier.client.type, show_etat=show_etat)
+        for (value, align), (_, width), cell_x in zip(values, columns, col_x):
+            _draw_monster_cell(ctx, cell_x, y - row_height, width, row_height, value, size=5.6, bold=False, align=align)
+        y -= row_height
+
+    ctx.rect(x, y, table_width, header_height + rows_count * row_height, stroke=_BLACK)
+    return y
+
+
+def _monster_devis_row_values(ligne, client_type: str, *, show_etat: bool) -> list[tuple[object, str]]:
+    if ligne is None:
+        values = ["", "", "", "", "", ""]
+        if show_etat:
+            values.insert(2, "")
+        return [(value, "center") for value in values]
+
+    tva = taux_tva_ligne(ligne, client_type)
+    values = [
+        (str(ligne.designation or "").upper(), "left"),
+        (_number(ligne.quantite), "center"),
+        (_money_fr(ligne.prix_unitaire_ht), "right"),
+        (_money_fr(ligne.total_ht), "right"),
+        (_percent_label(tva), "center"),
+        (_money_fr(montant_ttc_ligne(ligne, client_type)), "right"),
+    ]
+    if show_etat:
+        values.insert(2, (_etat_modele(ligne), "center"))
+    return values
+
+
+def _draw_monster_devis_totals(
+    ctx: "_PageContext",
+    table_x: float,
+    columns: list[tuple[str, float]],
+    top: float,
+    montant_ht,
+    montant_tva,
+    montant_ttc,
+) -> float:
+    table_width = sum(width for _, width in columns)
+    width = 166
+    x = table_x + table_width - width
+    row_height = 12
+    rows = [("Total HT", montant_ht), ("TVA", montant_tva), ("Total TTC", montant_ttc)]
+    y = top
+    for label, amount in rows:
+        ctx.rect(x, y - row_height, 68, row_height, fill=(0.93, 0.93, 0.93), stroke=_BLACK)
+        ctx.rect(x + 68, y - row_height, width - 68, row_height, stroke=_BLACK)
+        ctx.text(x + 4, y - 8, label, size=5.5, bold=True)
+        amount_text = _money_mad_compact(amount)
+        amount_x = x + width - 4 - _estimated_text_width(amount_text, 5.5)
+        ctx.text(amount_x, y - 8, amount_text, size=5.5)
+        y -= row_height
+    return y
+
+
+def _draw_monster_devis_legal(ctx: "_PageContext", devis: DevisReparation, montant_ttc, y: float) -> None:
+    phrase = f"Arrêté le présent devis à la somme de: {montant_en_lettres(montant_ttc)} TTC"
+    ctx.text(_DEVIS_LEFT, y, phrase, size=5.8, bold=True, italic=True)
+    ctx.line(_DEVIS_LEFT, y - 2, min(_DEVIS_RIGHT - 52, _DEVIS_LEFT + _estimated_text_width(phrase, 5.8, bold=True)), y - 2, width=0.45)
+    ctx.text(_DEVIS_LEFT, y - 24, "Devis reçu avant l'exécution des travaux", size=5.6, italic=True)
+    if devis.notes:
+        note_lines = _wrap(f"Notes: {devis.notes}", 100)[:3]
+        note_y = y - 42
+        for line in note_lines:
+            ctx.text(58, note_y, line, size=5.4)
+            note_y -= 8
+
+
+def _draw_monster_devis_signature(ctx: "_PageContext", *, y: float) -> None:
+    ctx.text(286, y, "Date :", size=5.4)
+    ctx.text(273, y - 31, "Bon pour accord", size=5.4)
+    ctx.text(270, y - 62, "Signature client", size=5.4)
+
+
+def _draw_monster_devis_footer(ctx: "_PageContext") -> None:
+    entreprise = obtenir_entreprise()
+    ctx.line(_DEVIS_LEFT, 93, _DEVIS_RIGHT, 93, color=(0.05, 0.05, 0.05), width=1.3)
+    footer_1 = _join_parts(f"RC: {entreprise.rc}", f"IF: {entreprise.if_fiscal}", f"ICE: {entreprise.ice}", f"Patente: {entreprise.patente}", sep=" / ")
+    footer_2 = f"Adresse: {_DEVIS_FOOTER_ADDRESS}"
+    footer_3 = _join_parts(f"Tél: {entreprise.telephones}", f"E-mail : {entreprise.email}", sep=" / ")
+    center_x = (_DEVIS_LEFT + _DEVIS_RIGHT) / 2
+    _center_text(ctx, center_x, 82, footer_1, size=5.4)
+    _center_text(ctx, center_x, 72, footer_2, size=5.4)
+    _center_text(ctx, center_x, 62, footer_3, size=5.4)
+
+
+def _draw_monster_cell(
+    ctx: "_PageContext",
+    x: float,
+    y: float,
+    width: float,
+    height: float,
+    value: object,
+    *,
+    size: float,
+    bold: bool = False,
+    align: str = "left",
+) -> None:
+    ctx.rect(x, y, width, height, stroke=_BLACK)
+    text = "" if value is None else str(value)
+    if not text:
+        return
+    fitted_size = _fit_font_size(text, size, max(4, width - 4), bold=bold)
+    text_x = _aligned_text_x(x, width, text, fitted_size, align, bold=bold, padding=2)
+    ctx.text(text_x, y + max(3.4, (height - fitted_size) / 2), text, size=fitted_size, bold=bold)
+
+
+def _center_text(ctx: "_PageContext", center_x: float, y: float, text: object, *, size: float, bold: bool = False) -> None:
+    value = _display(text)
+    ctx.text(center_x - _estimated_text_width(value, size, bold=bold) / 2, y, value, size=size, bold=bold)
+
+
+def _numero_devis_modele(devis: DevisReparation) -> str:
+    return f"{devis.dossier.numero}-V{devis.version}"
+
+
+def _etat_modele(ligne) -> str:
+    if getattr(ligne, "type_ligne", None) == "main_oeuvre" or getattr(ligne, "etat_piece", None) == "mo":
+        return "MO"
+    if getattr(ligne, "etat_piece", None) == "occasion":
+        return "OCC"
+    if getattr(ligne, "etat_piece", None) == "autre":
+        return str(getattr(ligne, "etat_piece_autre", "") or "AUTRE").upper()
+    return "NEUF"
+
+
+def _percent_label(rate: Decimal) -> str:
+    return f"{int((Decimal(str(rate)) * 100).quantize(Decimal('1')))}%"
+
+
+def _money_fr(value) -> str:
+    amount = Decimal(str(value or 0)).quantize(Decimal("0.01"))
+    return f"{amount:,.2f}".replace(",", " ").replace(".", ",")
+
+
+def _money_mad_compact(value) -> str:
+    return f"{_money_fr(value)}MAD"
+
+
 def _build_sntl_document_pdf(
     *,
     titre: str,
@@ -87,6 +374,10 @@ def _build_sntl_document_pdf(
     date_document,
     devis: DevisReparation,
     include_commission: bool,
+    lignes=None,
+    montant_ht=None,
+    montant_tva=None,
+    montant_ttc=None,
 ) -> bytes:
     pdf = _PdfDocument()
     ctx = _PageContext(pdf)
@@ -100,15 +391,15 @@ def _build_sntl_document_pdf(
     _draw_sntl_header(ctx, titre, numero, date_document)
     _draw_sntl_partner_blocks(ctx, entreprise, dossier, client, vehicule)
 
-    article_lines, labor_total = _split_sntl_lines(devis.lignes)
+    article_lines, labor_total = _split_sntl_lines(lignes if lignes is not None else devis.lignes)
     article_rows_count = max(10, len(article_lines))
     row_height = 13 if article_rows_count <= 10 else (11 if article_rows_count <= 18 else 9)
     body_size = 7 if article_rows_count <= 18 else 6
     totals_top, article_total = _draw_sntl_articles(ctx, 445, article_lines, article_rows_count, row_height, body_size)
 
-    total_ht = (article_total + labor_total).quantize(Decimal("0.01"))
-    montant_tva = (total_ht * tva).quantize(Decimal("0.01"))
-    montant_ttc = (total_ht + montant_tva).quantize(Decimal("0.01"))
+    total_ht = Decimal(str(montant_ht)).quantize(Decimal("0.01")) if montant_ht is not None else (article_total + labor_total).quantize(Decimal("0.01"))
+    montant_tva = Decimal(str(montant_tva)).quantize(Decimal("0.01")) if montant_tva is not None else (total_ht * tva).quantize(Decimal("0.01"))
+    montant_ttc = Decimal(str(montant_ttc)).quantize(Decimal("0.01")) if montant_ttc is not None else (total_ht + montant_tva).quantize(Decimal("0.01"))
     commission_sntl = calculer_commission_sntl(total_ht, montant_ttc)
 
     totals = [
@@ -144,6 +435,10 @@ def _build_document_pdf(
     devis: DevisReparation,
     statut: str,
     montant_regle=None,
+    lignes=None,
+    montant_ht=None,
+    montant_tva=None,
+    montant_ttc=None,
 ) -> bytes:
     pdf = _PdfDocument()
     ctx = _PageContext(pdf)
@@ -199,14 +494,18 @@ def _build_document_pdf(
     )
 
     y -= 16
-    y = _draw_lines_table(ctx, y, devis)
-    y = _draw_totals(ctx, y - 14, devis, montant_regle=montant_regle)
+    lignes = list(lignes if lignes is not None else devis.lignes)
+    montant_ht = devis.montant_ht if montant_ht is None else montant_ht
+    montant_tva = devis.montant_tva if montant_tva is None else montant_tva
+    montant_ttc = devis.montant_ttc if montant_ttc is None else montant_ttc
+    y = _draw_lines_table(ctx, y, devis, lignes=lignes)
+    y = _draw_totals(ctx, y - 14, montant_ht, montant_tva, montant_ttc, montant_regle=montant_regle)
 
     y -= 22
     if y < 130:
         ctx.new_page()
         y = 760
-    ctx.text(_MARGIN, y, _arrete(devis.montant_ttc), size=10, bold=True)
+    ctx.text(_MARGIN, y, _arrete(montant_ttc), size=10, bold=True)
     if devis.notes:
         ctx.text(_MARGIN, y - 18, f"Notes: {devis.notes}", size=9)
 
@@ -253,7 +552,7 @@ def _draw_info_blocks(
     return y - block_height
 
 
-def _draw_lines_table(ctx: "_PageContext", y: float, devis: DevisReparation) -> float:
+def _draw_lines_table(ctx: "_PageContext", y: float, devis: DevisReparation, *, lignes=None) -> float:
     columns = [
         ("REF", 48),
         ("DESIGNATION", 222),
@@ -273,7 +572,8 @@ def _draw_lines_table(ctx: "_PageContext", y: float, devis: DevisReparation) -> 
         return current_y - 24
 
     y = header(y)
-    for index, ligne in enumerate(devis.lignes, 1):
+    lignes = list(lignes if lignes is not None else devis.lignes)
+    for index, ligne in enumerate(lignes, 1):
         wrapped = _wrap(ligne.designation, 44)
         row_height = max(20, 10 + len(wrapped) * 10)
         if y - row_height < 122:
@@ -295,15 +595,15 @@ def _draw_lines_table(ctx: "_PageContext", y: float, devis: DevisReparation) -> 
     return y
 
 
-def _draw_totals(ctx: "_PageContext", y: float, devis: DevisReparation, *, montant_regle=None) -> float:
+def _draw_totals(ctx: "_PageContext", y: float, montant_ht, montant_tva, montant_ttc, *, montant_regle=None) -> float:
     rows = [
-        ("Montant HT", devis.montant_ht),
-        ("TVA", devis.montant_tva),
-        ("Montant TTC", devis.montant_ttc),
+        ("Montant HT", montant_ht),
+        ("TVA", montant_tva),
+        ("Montant TTC", montant_ttc),
     ]
     if montant_regle is not None:
         montant_regle = Decimal(str(montant_regle or 0)).quantize(Decimal("0.01"))
-        reste = max(Decimal(str(devis.montant_ttc or 0)) - montant_regle, Decimal("0.00"))
+        reste = max(Decimal(str(montant_ttc or 0)) - montant_regle, Decimal("0.00"))
         rows.extend([("Montant encaisse", montant_regle), ("Reste a payer", reste)])
 
     x = 346
@@ -501,8 +801,15 @@ class _PageContext:
         self.commands = []
         self.pdf.pages.append(self.commands)
 
-    def text(self, x: float, y: float, text: object, *, size=10, bold=False, color=_BLACK) -> None:
-        font = "F2" if bold else "F1"
+    def text(self, x: float, y: float, text: object, *, size=10, bold=False, italic=False, color=_BLACK) -> None:
+        if bold and italic:
+            font = "F4"
+        elif italic:
+            font = "F3"
+        elif bold:
+            font = "F2"
+        else:
+            font = "F1"
         self.commands.append(
             f"{color[0]:.3f} {color[1]:.3f} {color[2]:.3f} rg\nBT /{font} {size:.2f} Tf {x:.2f} {y:.2f} Td ".encode("ascii")
             + b"("
@@ -510,8 +817,8 @@ class _PageContext:
             + b") Tj ET\n"
         )
 
-    def line(self, x1: float, y1: float, x2: float, y2: float, color=_BLACK) -> None:
-        self.commands.append(f"{color[0]:.3f} {color[1]:.3f} {color[2]:.3f} RG\n{x1:.2f} {y1:.2f} m {x2:.2f} {y2:.2f} l S\n".encode("ascii"))
+    def line(self, x1: float, y1: float, x2: float, y2: float, color=_BLACK, *, width: float = 1) -> None:
+        self.commands.append(f"{width:.2f} w\n{color[0]:.3f} {color[1]:.3f} {color[2]:.3f} RG\n{x1:.2f} {y1:.2f} m {x2:.2f} {y2:.2f} l S\n".encode("ascii"))
 
     def rect(self, x: float, y: float, width: float, height: float, *, fill=None, stroke=None) -> None:
         if fill:
@@ -521,10 +828,65 @@ class _PageContext:
         op = "B" if fill and stroke else ("f" if fill else "S")
         self.commands.append(f"{x:.2f} {y:.2f} {width:.2f} {height:.2f} re {op}\n".encode("ascii"))
 
+    def round_rect(self, x: float, y: float, width: float, height: float, radius: float, *, fill=None, stroke=None) -> None:
+        k = 0.55228475
+        r = min(radius, width / 2, height / 2)
+        if fill:
+            self.commands.append(f"{fill[0]:.3f} {fill[1]:.3f} {fill[2]:.3f} rg\n".encode("ascii"))
+        if stroke:
+            self.commands.append(f"{stroke[0]:.3f} {stroke[1]:.3f} {stroke[2]:.3f} RG\n".encode("ascii"))
+        path = (
+            f"{x + r:.2f} {y:.2f} m "
+            f"{x + width - r:.2f} {y:.2f} l "
+            f"{x + width - r + k * r:.2f} {y:.2f} {x + width:.2f} {y + r - k * r:.2f} {x + width:.2f} {y + r:.2f} c "
+            f"{x + width:.2f} {y + height - r:.2f} l "
+            f"{x + width:.2f} {y + height - r + k * r:.2f} {x + width - r + k * r:.2f} {y + height:.2f} {x + width - r:.2f} {y + height:.2f} c "
+            f"{x + r:.2f} {y + height:.2f} l "
+            f"{x + r - k * r:.2f} {y + height:.2f} {x:.2f} {y + height - r + k * r:.2f} {x:.2f} {y + height - r:.2f} c "
+            f"{x:.2f} {y + r:.2f} l "
+            f"{x:.2f} {y + r - k * r:.2f} {x + r - k * r:.2f} {y:.2f} {x + r:.2f} {y:.2f} c h "
+        )
+        op = "B" if fill and stroke else ("f" if fill else "S")
+        self.commands.append(f"{path}{op}\n".encode("ascii"))
+
+    def image(self, path: Path, x: float, y: float, width: float, height: float) -> None:
+        image_name = self.pdf.add_image(path)
+        if not image_name:
+            return
+        self.commands.append(f"q {width:.2f} 0 0 {height:.2f} {x:.2f} {y:.2f} cm /{image_name} Do Q\n".encode("ascii"))
+
 
 class _PdfDocument:
     def __init__(self):
         self.pages: list[list[bytes]] = []
+        self.images: dict[str, dict] = {}
+        self._image_paths: dict[str, str] = {}
+
+    def add_image(self, path: Path) -> str | None:
+        key = str(path)
+        if key in self._image_paths:
+            return self._image_paths[key]
+        if not path.exists():
+            return None
+        try:
+            image = Image.open(path)
+            if image.mode in {"RGBA", "LA"}:
+                background = Image.new("RGB", image.size, (255, 255, 255))
+                background.paste(image, mask=image.getchannel("A"))
+                image = background
+            else:
+                image = image.convert("RGB")
+        except Exception:
+            return None
+
+        name = f"Im{len(self.images) + 1}"
+        self.images[name] = {
+            "width": image.width,
+            "height": image.height,
+            "data": zlib.compress(image.tobytes()),
+        }
+        self._image_paths[key] = name
+        return name
 
     def render(self) -> bytes:
         objects: list[bytes] = [
@@ -532,7 +894,26 @@ class _PdfDocument:
             b"",  # pages tree, filled after page objects are known
             b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
             b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>",
+            b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique /Encoding /WinAnsiEncoding >>",
+            b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-BoldOblique /Encoding /WinAnsiEncoding >>",
         ]
+        image_object_ids = {}
+        for name, image in self.images.items():
+            object_id = len(objects) + 1
+            image_object_ids[name] = object_id
+            objects.append(
+                (
+                    f"<< /Type /XObject /Subtype /Image /Width {image['width']} /Height {image['height']} "
+                    f"/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /Length {len(image['data'])} >>\n"
+                ).encode("ascii")
+                + b"stream\n"
+                + image["data"]
+                + b"\nendstream"
+            )
+
+        xobjects = ""
+        if image_object_ids:
+            xobjects = " /XObject << " + " ".join(f"/{name} {object_id} 0 R" for name, object_id in image_object_ids.items()) + " >>"
         page_ids = []
         for commands in self.pages:
             content = b"".join(commands)
@@ -540,7 +921,7 @@ class _PdfDocument:
             page_id = len(objects) + 1
             page_ids.append(page_id)
             objects.append(
-                f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {_PAGE_WIDTH:.2f} {_PAGE_HEIGHT:.2f}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents {content_id} 0 R >>".encode("ascii")
+                f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {_PAGE_WIDTH:.2f} {_PAGE_HEIGHT:.2f}] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R /F4 6 0 R >>{xobjects} >> /Contents {content_id} 0 R >>".encode("ascii")
             )
             objects.append(b"<< /Length " + str(len(content)).encode("ascii") + b" >>\nstream\n" + content + b"endstream")
 
@@ -621,7 +1002,7 @@ def _split_sntl_lines(lines) -> tuple[list, Decimal]:
     article_lines = []
     labor_total = Decimal("0.00")
     for line in lines:
-        if _is_labor_line(line.designation):
+        if getattr(line, "type_ligne", None) == "main_oeuvre" or _is_labor_line(line.designation):
             labor_total += Decimal(str(line.total_ht or 0))
         else:
             article_lines.append(line)

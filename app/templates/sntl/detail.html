@@ -43,6 +43,7 @@
                 {% endif %}
                 <div class="flex justify-between gap-4"><dt class="text-slate-500">Dernier devis</dt><dd class="font-black text-slate-900">{{ dossier.dernier_devis.statut_libelle if dossier.dernier_devis else "Aucun" }}</dd></div>
                 <div class="flex justify-between gap-4"><dt class="text-slate-500">Facture</dt><dd class="font-black text-slate-900">{{ dossier.facture.numero if dossier.facture else "Non generee" }}</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-slate-500">Avances</dt><dd class="font-black text-slate-900">{{ "%.2f"|format(dossier.montant_avances_client) }} MAD</dd></div>
             </dl>
         </section>
 
@@ -52,6 +53,50 @@
             {% if dossier.diagnostic_initial %}
             <p class="mt-3 rounded-md bg-slate-50 p-3 text-xs font-semibold leading-5 text-slate-600">{{ dossier.diagnostic_initial }}</p>
             {% endif %}
+        </section>
+
+        <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 class="text-sm font-black text-slate-950">Avance avant réparation</h2>
+            {% if dossier.avances_client %}
+                <div class="mt-3 divide-y divide-slate-100">
+                    {% for avance in dossier.avances_client %}
+                    <div class="py-2 text-sm">
+                        <div class="flex justify-between gap-3">
+                            <span class="font-bold text-slate-700">{{ avance.date.strftime("%d/%m/%Y") }} - {{ avance.mode_reglement_libelle }}</span>
+                            <strong class="text-slate-950">{{ "%.2f"|format(avance.montant) }} MAD</strong>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+            {% if not dossier.facture %}
+            <form class="mt-4 grid gap-2" method="post" action="{{ url_for('sntl.nouvelle_avance_client', dossier_id=dossier.id) }}">
+                <input class="h-10 rounded-md border border-slate-300 px-3 text-sm" type="date" name="date" required>
+                <input class="h-10 rounded-md border border-slate-300 px-3 text-sm" type="number" min="0.01" step="0.01" name="montant" placeholder="Montant MAD" required>
+                <select class="h-10 rounded-md border border-slate-300 px-3 text-sm" name="mode_reglement">
+                    <option value="especes">Espèces</option>
+                    <option value="cheque">Chèque</option>
+                    <option value="virement">Virement</option>
+                    <option value="carte">Carte</option>
+                    <option value="autre">Autre</option>
+                </select>
+                <button class="h-10 rounded-md bg-monster-jaune px-3 text-xs font-black text-black" type="submit">Enregistrer avance</button>
+            </form>
+            {% endif %}
+        </section>
+
+        <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 class="text-sm font-black text-slate-950">Attestation d'immobilisation</h2>
+            <form class="mt-3 grid gap-2" method="get">
+                <label class="grid gap-1 text-xs font-bold text-slate-700">
+                    Jours de réparation
+                    <input class="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm" type="number" name="jours_reparation" min="1" max="365" value="7" required>
+                </label>
+                <div class="grid grid-cols-2 gap-2">
+                    <button class="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-xs font-black uppercase text-slate-600 hover:bg-slate-50" type="submit" formaction="{{ url_for('dossiers.attestation_immobilisation_pdf', dossier_id=dossier.id) }}">PDF</button>
+                    <button class="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-xs font-black uppercase text-slate-600 hover:bg-slate-50" type="submit" formaction="{{ url_for('dossiers.attestation_immobilisation_docx', dossier_id=dossier.id) }}">Word</button>
+                </div>
+            </form>
         </section>
     </aside>
 
@@ -98,6 +143,10 @@
                         {% endif %}
                         {% if dossier.dernier_devis %}
                         <div class="mt-2 grid grid-cols-2 gap-2">
+                            {% if dossier.dernier_devis.statut == 'pending' %}
+                            <a class="inline-flex h-8 items-center justify-center rounded-md border border-yellow-300 bg-yellow-50 px-2 text-[10px] font-black uppercase text-slate-700 hover:bg-yellow-100" href="{{ url_for('dossiers.modifier', devis_id=dossier.dernier_devis.id) }}">Modifier</a>
+                            {% endif %}
+                            <a class="inline-flex h-8 items-center justify-center rounded-md border border-slate-200 bg-white px-2 text-[10px] font-black uppercase text-slate-600 hover:bg-slate-50" href="{{ url_for('dossiers.imprimer_devis', devis_id=dossier.dernier_devis.id) }}" target="_blank" rel="noopener">Imprimer</a>
                             <a class="inline-flex h-8 items-center justify-center rounded-md border border-slate-200 bg-white px-2 text-[10px] font-black uppercase text-slate-600 hover:bg-slate-50" href="{{ url_for('dossiers.voir_devis_pdf', devis_id=dossier.dernier_devis.id) }}" target="_blank" rel="noopener">PDF</a>
                             <a class="inline-flex h-8 items-center justify-center rounded-md border border-slate-200 bg-white px-2 text-[10px] font-black uppercase text-slate-600 hover:bg-slate-50" href="{{ url_for('dossiers.telecharger_devis', devis_id=dossier.dernier_devis.id) }}">Excel</a>
                         </div>
@@ -176,7 +225,7 @@
                         <div class="flex items-start justify-between gap-4">
                             <div>
                                 <h3 class="font-black text-slate-950">v{{ devis.version }} - {{ devis.objet }}</h3>
-                                <p class="text-sm font-semibold text-slate-500">{{ devis.statut_libelle }}</p>
+                                <p class="text-sm font-semibold text-slate-500">{{ devis.statut_libelle }} - {{ devis.type_libelle }}</p>
                             </div>
                             <strong class="text-lg font-black text-slate-950">{{ "%.2f"|format(devis.montant_ttc) }} MAD</strong>
                         </div>

@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from app.extensions import db
 
@@ -55,6 +56,12 @@ class DossierReparation(db.Model):
         cascade="all, delete-orphan",
         uselist=False,
     )
+    avances_client = db.relationship(
+        "AvanceClient",
+        back_populates="dossier",
+        cascade="all, delete-orphan",
+        order_by="AvanceClient.date",
+    )
 
     @property
     def statut_libelle(self) -> str:
@@ -85,6 +92,51 @@ class DossierReparation(db.Model):
         if not devis_approuves:
             return None
         return max(devis_approuves, key=lambda devis: devis.version)
+
+    @property
+    def devis_approuves_facturables(self):
+        devis_approuves = sorted(
+            [devis for devis in self.devis if devis.statut == "approved"],
+            key=lambda devis: devis.version,
+        )
+        if not devis_approuves:
+            return []
+
+        devis_base = [devis for devis in devis_approuves if not devis.est_complementaire]
+        if not devis_base:
+            return devis_approuves
+
+        dernier_devis_base = devis_base[-1]
+        return [
+            devis
+            for devis in devis_approuves
+            if devis == dernier_devis_base
+            or (devis.est_complementaire and devis.version > dernier_devis_base.version)
+        ]
+
+    @property
+    def devis_complementaires_facturables(self):
+        devis_approuves = sorted(
+            [devis for devis in self.devis if devis.statut == "approved"],
+            key=lambda devis: devis.version,
+        )
+        devis_base = [devis for devis in devis_approuves if not devis.est_complementaire]
+        if not devis_base:
+            return [devis for devis in devis_approuves if devis.est_complementaire]
+
+        dernier_devis_base = devis_base[-1]
+        return [
+            devis
+            for devis in devis_approuves
+            if devis.est_complementaire and devis.version > dernier_devis_base.version
+        ]
+
+    @property
+    def montant_avances_client(self):
+        return sum(
+            (Decimal(str(avance.montant or 0)) for avance in self.avances_client),
+            Decimal("0.00"),
+        ).quantize(Decimal("0.01"))
 
 
 class JournalAction(db.Model):

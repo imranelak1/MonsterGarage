@@ -156,7 +156,7 @@
                 <td class="px-3 py-3 text-right">
                     {% if ligne.quinzaine %}
                         <span class="font-black text-slate-950">{{ "%.2f"|format(ligne.quinzaine.montant_net_paye) }}</span>
-                    {% elif emp.type_remuneration == 'tache' %}
+                    {% elif emp.type_remuneration in ['tache', 'mensuelle'] %}
                         <span class="text-slate-400 text-xs">N/A</span>
                     {% else %}
                         <span class="text-amber-600 text-xs font-black">À faire</span>
@@ -191,7 +191,7 @@
                     {% elif emp.type_remuneration == 'tache' %}
                         <span class="text-slate-400 text-xs">Manuel</span>
                     {% else %}
-                        {% set solde_prevu = (emp.salaire_quinzaine or 0) - ligne.avances_a_deduire %}
+                        {% set solde_prevu = (emp.salaire_mensuel if emp.type_remuneration == 'mensuelle' else emp.salaire_quinzaine or 0) - ligne.avances_a_deduire %}
                         <span class="text-amber-600 text-xs font-black">À calculer</span>
                         <p class="text-[10px] font-semibold text-slate-400">prévu {{ "%.2f"|format(solde_prevu) }}</p>
                     {% endif %}

@@ -14,6 +14,7 @@ class DevisReparation(db.Model):
     montant_ht = db.Column(db.Numeric(12, 2), nullable=False, default=0)
     montant_tva = db.Column(db.Numeric(12, 2), nullable=False, default=0)
     montant_ttc = db.Column(db.Numeric(12, 2), nullable=False, default=0)
+    est_complementaire = db.Column(db.Boolean, default=False, nullable=False)
     notes = db.Column(db.Text)
     mode_accord = db.Column(db.Enum("telephone", "signature", "presentiel", "systeme", name="mode_accord_devis"))
     accord_client = db.Column(db.Boolean, default=False, nullable=False)
@@ -56,6 +57,10 @@ class DevisReparation(db.Model):
         }
         return modes.get(self.mode_accord, self.mode_accord or "-")
 
+    @property
+    def type_libelle(self) -> str:
+        return "Complémentaire" if self.est_complementaire else "Version complète"
+
 
 class LigneDevisReparation(db.Model):
     __tablename__ = "lignes_devis_reparation"
@@ -66,10 +71,58 @@ class LigneDevisReparation(db.Model):
     quantite = db.Column(db.Numeric(10, 2), nullable=False, default=1)
     prix_unitaire_ht = db.Column(db.Numeric(10, 2), nullable=False, default=0)
     total_ht = db.Column(db.Numeric(12, 2), nullable=False, default=0)
-    etat_piece = db.Column(db.Enum("neuf", "occasion", name="etat_piece_devis"), default="neuf", nullable=False)
+    type_ligne = db.Column(
+        db.Enum("piece", "main_oeuvre", "autre", name="type_ligne_devis"),
+        default="piece",
+        nullable=False,
+    )
+    etat_piece = db.Column(
+        db.Enum("neuf", "occasion", "mo", "autre", name="etat_piece_devis"),
+        default="neuf",
+        nullable=False,
+    )
+    etat_piece_autre = db.Column(db.String(80))
+    type_mo = db.Column(
+        db.Enum(
+            "mecanique",
+            "electricite",
+            "tolerie",
+            "peinture",
+            "diagnostic",
+            "autre",
+            name="type_main_oeuvre_devis",
+        )
+    )
 
     devis = db.relationship("DevisReparation", back_populates="lignes")
 
     @property
     def etat_piece_libelle(self) -> str:
-        return "Occasion" if self.etat_piece == "occasion" else "Neuf"
+        labels = {
+            "neuf": "Neuf",
+            "occasion": "Occasion",
+            "mo": "M.O",
+            "autre": self.etat_piece_autre or "Autre",
+        }
+        return labels.get(self.etat_piece, self.etat_piece or "-")
+
+    @property
+    def type_ligne_libelle(self) -> str:
+        labels = {
+            "piece": "Pièce",
+            "main_oeuvre": "Main d'œuvre",
+            "autre": "Autre",
+        }
+        return labels.get(self.type_ligne, self.type_ligne or "-")
+
+    @property
+    def type_mo_libelle(self) -> str:
+        labels = {
+            "mecanique": "Mécanique",
+            "electricite": "Électricité",
+            "tolerie": "Tôlerie",
+            "peinture": "Peinture",
+            "diagnostic": "Diagnostic",
+            "autre": "Autre",
+        }
+        return labels.get(self.type_mo, self.type_mo or "-")

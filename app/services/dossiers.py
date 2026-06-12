@@ -6,10 +6,13 @@ from flask_login import current_user
 
 from app.extensions import db
 from app.models import DevisReparation, DossierReparation, JournalAction, LigneDevisReparation
+from app.services.devis_totaux import calculer_totaux_lignes
 from app.services.workflow import transition_dossier_autorisee
 
-TAUX_TVA_DEFAUT = Decimal("0.20")
 MODES_ACCORD_AUTORISES = {"telephone", "signature", "presentiel", "systeme"}
+TYPES_LIGNE_AUTORISES = {"piece", "main_oeuvre", "autre"}
+ETATS_LIGNE_AUTORISES = {"neuf", "occasion", "mo", "autre"}
+TYPES_MO_AUTORISES = {"mecanique", "electricite", "tolerie", "peinture", "diagnostic", "autre"}
 
 
 class RegleMetierErreur(ValueError):
@@ -62,21 +65,35 @@ def changer_statut_dossier(dossier: DossierReparation, nouveau_statut: str) -> N
     dossier.statut = nouveau_statut
 
 
-def creer_devis(dossier: DossierReparation, objet: str, lignes_formulaire: list[dict], notes: str = "") -> DevisReparation:
+def creer_devis(
+    dossier: DossierReparation,
+    objet: str,
+    lignes_formulaire: list[dict],
+    notes: str = "",
+    est_complementaire: bool = False,
+    confirmer_remplacement_complements: bool = False,
+) -> DevisReparation:
     if any(devis.statut == "pending" for devis in dossier.devis):
         raise RegleMetierErreur("Un devis est déjà en attente d'accord pour ce dossier.")
 
     if dossier.statut not in {"pending_devis", "paused_pending_approval"}:
-        raise RegleMetierErreur("Un devis ne peut être créé que si le dossier attend un devis ou un accord complémentaire.")
+        raise RegleMetierErreur("Un devis ne peut être créé que si le dossier attend un devis ou un nouvel accord.")
+
+    if (
+        not est_complementaire
+        and dossier.devis_complementaires_facturables
+        and not confirmer_remplacement_complements
+    ):
+        raise RegleMetierErreur(
+            "Confirmez le remplacement des devis complémentaires approuvés avant de créer une version complète."
+        )
 
     lignes = [_normaliser_ligne(ligne) for ligne in lignes_formulaire if ligne.get("designation", "").strip()]
     if not lignes:
         raise RegleMetierErreur("Ajoutez au moins une ligne au devis.")
 
     version = (max([devis.version for devis in dossier.devis], default=0) + 1)
-    montant_ht = sum(ligne["total_ht"] for ligne in lignes)
-    montant_tva = (montant_ht * TAUX_TVA_DEFAUT).quantize(Decimal("0.01"))
-    montant_ttc = (montant_ht + montant_tva).quantize(Decimal("0.01"))
+    montant_ht, montant_tva, montant_ttc = calculer_totaux_lignes(lignes, dossier.client.type)
 
     devis = DevisReparation(
         dossier_id=dossier.id,
@@ -85,6 +102,7 @@ def creer_devis(dossier: DossierReparation, objet: str, lignes_formulaire: list[
         montant_ht=montant_ht,
         montant_tva=montant_tva,
         montant_ttc=montant_ttc,
+        est_complementaire=est_complementaire,
         notes=notes.strip(),
         created_by_id=current_user.id,
     )
@@ -99,12 +117,47 @@ def creer_devis(dossier: DossierReparation, objet: str, lignes_formulaire: list[
                 quantite=ligne["quantite"],
                 prix_unitaire_ht=ligne["prix_unitaire_ht"],
                 total_ht=ligne["total_ht"],
+                type_ligne=ligne["type_ligne"],
                 etat_piece=ligne["etat_piece"],
+                etat_piece_autre=ligne["etat_piece_autre"],
+                type_mo=ligne["type_mo"],
             )
         )
 
     changer_statut_dossier(dossier, "pending_approval")
     journaliser(dossier, "devis_cree", f"Devis v{version} créé pour {montant_ttc} MAD TTC.")
+    return devis
+
+
+def modifier_devis(devis: DevisReparation, objet: str, lignes_formulaire: list[dict], notes: str = "") -> DevisReparation:
+    if devis.statut != "pending":
+        raise RegleMetierErreur("Seul un devis en attente peut être modifié directement.")
+
+    lignes = [_normaliser_ligne(ligne) for ligne in lignes_formulaire if ligne.get("designation", "").strip()]
+    if not lignes:
+        raise RegleMetierErreur("Ajoutez au moins une ligne au devis.")
+
+    devis.objet = objet.strip() or devis.objet
+    devis.notes = notes.strip()
+    devis.montant_ht, devis.montant_tva, devis.montant_ttc = calculer_totaux_lignes(lignes, devis.dossier.client.type)
+
+    devis.lignes[:] = []
+    db.session.flush()
+    for ligne in lignes:
+        devis.lignes.append(
+            LigneDevisReparation(
+                designation=ligne["designation"],
+                quantite=ligne["quantite"],
+                prix_unitaire_ht=ligne["prix_unitaire_ht"],
+                total_ht=ligne["total_ht"],
+                type_ligne=ligne["type_ligne"],
+                etat_piece=ligne["etat_piece"],
+                etat_piece_autre=ligne["etat_piece_autre"],
+                type_mo=ligne["type_mo"],
+            )
+        )
+
+    journaliser(devis.dossier, "devis_modifie", f"Devis v{devis.version} modifié pour {devis.montant_ttc} MAD TTC.")
     return devis
 
 
@@ -140,6 +193,15 @@ def refuser_devis(devis: DevisReparation, motif: str = "") -> None:
 
     devis.statut = "rejected"
     devis.motif_refus = motif.strip()
+    if devis.est_complementaire and _devis_base_approuve_avant(devis):
+        changer_statut_dossier(dossier, "in_progress")
+        journaliser(
+            dossier,
+            "devis_complementaire_refuse",
+            f"Devis complémentaire v{devis.version} refusé. Reprise des travaux déjà approuvés.",
+        )
+        return
+
     changer_statut_dossier(dossier, "pending_devis")
     journaliser(dossier, "devis_refuse", f"Devis v{devis.version} refusé. Créer une version corrigée ou annuler le dossier.")
 
@@ -150,6 +212,15 @@ def mettre_en_pause(dossier: DossierReparation, raison: str) -> None:
 
     changer_statut_dossier(dossier, "paused_pending_approval")
     journaliser(dossier, "pause_accord_requis", raison.strip() or "Travaux supplémentaires détectés.")
+
+
+def _devis_base_approuve_avant(devis: DevisReparation) -> bool:
+    return any(
+        autre.statut == "approved"
+        and not autre.est_complementaire
+        and autre.version < devis.version
+        for autre in devis.dossier.devis
+    )
 
 
 def terminer_dossier(dossier: DossierReparation) -> None:
@@ -205,13 +276,27 @@ def _normaliser_ligne(ligne: dict) -> dict:
     designation = ligne.get("designation", "").strip()
     quantite = _decimal(ligne.get("quantite"), Decimal("1"))
     prix_unitaire_ht = _decimal(ligne.get("prix_unitaire_ht"), Decimal("0"))
-    etat_piece = ligne.get("etat_piece") if ligne.get("etat_piece") in {"neuf", "occasion"} else "neuf"
+    type_ligne = ligne.get("type_ligne") if ligne.get("type_ligne") in TYPES_LIGNE_AUTORISES else "piece"
+    type_mo = ligne.get("type_mo") if ligne.get("type_mo") in TYPES_MO_AUTORISES else None
+    etat_piece = ligne.get("etat_piece") if ligne.get("etat_piece") in ETATS_LIGNE_AUTORISES else "neuf"
+    etat_piece_autre = (ligne.get("etat_piece_autre") or "").strip()
+    if type_ligne == "main_oeuvre":
+        etat_piece = "mo"
+        type_mo = type_mo or "mecanique"
+    elif etat_piece == "mo":
+        type_ligne = "main_oeuvre"
+        type_mo = type_mo or "mecanique"
+    elif etat_piece == "autre" and not etat_piece_autre:
+        etat_piece_autre = "Autre"
     total_ht = (quantite * prix_unitaire_ht).quantize(Decimal("0.01"))
     return {
         "designation": designation,
         "quantite": quantite,
         "prix_unitaire_ht": prix_unitaire_ht,
+        "type_ligne": type_ligne,
         "etat_piece": etat_piece,
+        "etat_piece_autre": etat_piece_autre,
+        "type_mo": type_mo,
         "total_ht": total_ht,
     }
 

@@ -21,7 +21,7 @@
         <span>Employé</span>
         <span>Fonction</span>
         <span>Rémunération</span>
-        <span class="text-right">Salaire quinzaine</span>
+        <span class="text-right">Salaire</span>
         <span></span>
     </div>
     <div class="divide-y divide-slate-100">
@@ -42,7 +42,9 @@
             <span class="text-slate-600">{{ emp.fonction_libelle }}</span>
             <span class="text-slate-600">{{ emp.type_remuneration_libelle }}</span>
             <span class="text-right font-semibold text-slate-800">
-                {% if emp.salaire_quinzaine %}
+                {% if emp.type_remuneration == 'mensuelle' and emp.salaire_mensuel %}
+                    {{ "%.2f"|format(emp.salaire_mensuel) }} DH
+                {% elif emp.salaire_quinzaine %}
                     {{ "%.2f"|format(emp.salaire_quinzaine) }} DH
                 {% else %}
                     <span class="text-slate-400">—</span>

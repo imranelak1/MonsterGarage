@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from app.extensions import db
 
@@ -65,3 +66,23 @@ class FactureReparation(db.Model):
     def montant_restant(self):
         restant = self.montant_ttc - (self.montant_regle or 0)
         return max(restant, 0)
+
+    @property
+    def devis_facturables(self):
+        if not self.dossier:
+            return [self.devis] if self.devis else []
+        devis = self.dossier.devis_approuves_facturables
+        return devis or ([self.devis] if self.devis else [])
+
+    @property
+    def lignes_facture(self):
+        lignes = []
+        for devis in self.devis_facturables:
+            lignes.extend(devis.lignes)
+        return lignes
+
+    @property
+    def montant_avances_client(self):
+        if not self.dossier:
+            return Decimal("0.00")
+        return min(self.dossier.montant_avances_client, Decimal(str(self.montant_ttc or 0))).quantize(Decimal("0.01"))

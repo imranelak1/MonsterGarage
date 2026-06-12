@@ -86,18 +86,28 @@
             <select id="type_remuneration" name="type_remuneration"
                     class="h-11 rounded-md border border-slate-300 px-3 focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100 outline-none">
                 <option value="tache" {% if not employe or employe.type_remuneration == 'tache' %}selected{% endif %}>À la tâche</option>
+                <option value="mensuelle" {% if employe and employe.type_remuneration == 'mensuelle' %}selected{% endif %}>Mensuelle</option>
                 <option value="salaire_fixe" {% if employe and employe.type_remuneration == 'salaire_fixe' %}selected{% endif %}>Salaire fixe</option>
                 <option value="mixte" {% if employe and employe.type_remuneration == 'mixte' %}selected{% endif %}>Mixte (fixe + primes)</option>
             </select>
         </div>
 
-        <div id="champ-salaire" class="grid gap-1.5 {% if not employe or employe.type_remuneration == 'tache' %}hidden{% endif %}">
+        <div id="champ-salaire" class="grid gap-1.5 {% if not employe or employe.type_remuneration not in ['salaire_fixe', 'mixte'] %}hidden{% endif %}">
             <label class="text-sm font-black text-slate-700" for="salaire_quinzaine">Salaire quinzaine (DH)</label>
             <input type="number" id="salaire_quinzaine" name="salaire_quinzaine" step="0.01" min="0"
                    value="{{ employe.salaire_quinzaine or '' if employe else '' }}"
                    placeholder="Ex: 2250"
                    class="h-11 rounded-md border border-slate-300 px-3 focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100 outline-none">
             <p class="text-xs text-slate-400">Montant payé au 15 et base du solde fin de mois.</p>
+        </div>
+
+        <div id="champ-salaire-mensuel" class="grid gap-1.5 {% if not employe or employe.type_remuneration != 'mensuelle' %}hidden{% endif %}">
+            <label class="text-sm font-black text-slate-700" for="salaire_mensuel">Salaire mensuel (DH)</label>
+            <input type="number" id="salaire_mensuel" name="salaire_mensuel" step="0.01" min="0"
+                   value="{{ employe.salaire_mensuel or '' if employe else '' }}"
+                   placeholder="Ex: 4500"
+                   class="h-11 rounded-md border border-slate-300 px-3 focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100 outline-none">
+            <p class="text-xs text-slate-400">Payé en une seule fois au solde fin de mois, sans quinzaine.</p>
         </div>
     </section>
 
@@ -127,8 +137,10 @@
 <script>
 const typeSelect = document.getElementById('type_remuneration');
 const champSalaire = document.getElementById('champ-salaire');
+const champSalaireMensuel = document.getElementById('champ-salaire-mensuel');
 typeSelect?.addEventListener('change', () => {
-    champSalaire?.classList.toggle('hidden', typeSelect.value === 'tache');
+    champSalaire?.classList.toggle('hidden', !['salaire_fixe', 'mixte'].includes(typeSelect.value));
+    champSalaireMensuel?.classList.toggle('hidden', typeSelect.value !== 'mensuelle');
 });
 </script>
 

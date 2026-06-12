@@ -1,39 +1,92 @@
 {% extends "base.html" %}
 
-{% block title %}Nouveau devis - {{ dossier.numero }}{% endblock %}
+{% set is_edit = devis_a_modifier is defined %}
+{% set is_sntl = dossier.client.type == 'sntl' %}
+{% set mode_devis = request.form.get('mode_devis') or request.args.get('mode_devis') or ('remplacement' if dossier.statut == 'paused_pending_approval' and dossier.dernier_devis else 'initial') %}
+{% set is_complementaire = mode_devis == 'complementaire' and not is_edit %}
+{% set complements_remplaces = dossier.devis_complementaires_facturables if not is_edit and not is_complementaire else [] %}
+{% if is_edit %}
+    {% set devis_reference = devis_a_modifier %}
+{% elif dossier.dernier_devis and dossier.dernier_devis.statut == 'rejected' %}
+    {% set devis_reference = dossier.dernier_devis %}
+{% elif dossier.statut == 'paused_pending_approval' and not is_complementaire and dossier.dernier_devis %}
+    {% set devis_reference = dossier.dernier_devis %}
+{% else %}
+    {% set devis_reference = none %}
+{% endif %}
+
+{% block title %}{% if is_edit %}Modifier devis{% elif is_complementaire %}Devis complémentaire{% else %}Nouveau devis{% endif %} - {{ dossier.numero }}{% endblock %}
 
 {% block content %}
-{% set devis_reference = dossier.dernier_devis %}
-{% set is_sntl = dossier.client.type == 'sntl' %}
-
 <section class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
     <div>
         <p class="text-sm font-semibold text-slate-500">{{ dossier.numero }}</p>
         <h1 class="mt-1 text-3xl font-black tracking-tight text-slate-950">
-            {% if devis_reference %}Nouvelle version du devis{% else %}Nouveau devis{% endif %}
+            {% if is_edit %}Modifier le devis v{{ devis_a_modifier.version }}{% elif is_complementaire %}Devis complémentaire{% elif devis_reference %}Version corrigée du devis{% else %}Nouveau devis{% endif %}
         </h1>
     </div>
-    <a class="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50" href="{{ url_for('dossiers.detail', dossier_id=dossier.id) }}">Retour dossier</a>
+    <a class="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+       href="{{ url_for('sntl.detail', dossier_id=dossier.id) if is_sntl else url_for('dossiers.detail', dossier_id=dossier.id) }}">Retour dossier</a>
 </section>
 
-{% if devis_reference %}
+{% if dossier.statut == 'paused_pending_approval' and not is_edit %}
+    <section class="mb-5 grid gap-2 rounded-lg border border-slate-200 bg-white p-3 text-sm shadow-sm sm:grid-cols-2">
+        <a class="inline-flex min-h-11 items-center justify-center rounded-md px-4 font-black transition {% if not is_complementaire %}bg-slate-950 text-white{% else %}border border-slate-300 text-slate-700 hover:bg-slate-50{% endif %}"
+           href="{{ url_for(request.endpoint, dossier_id=dossier.id, mode_devis='remplacement') }}">Version complète</a>
+        <a class="inline-flex min-h-11 items-center justify-center rounded-md px-4 font-black transition {% if is_complementaire %}bg-slate-950 text-white{% else %}border border-slate-300 text-slate-700 hover:bg-slate-50{% endif %}"
+           href="{{ url_for(request.endpoint, dossier_id=dossier.id, mode_devis='complementaire') }}">Devis complémentaire</a>
+    </section>
+{% endif %}
+
+{% if devis_reference and not is_edit %}
     <section class="mb-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-        <p class="font-black">Les lignes du devis v{{ devis_reference.version }} sont reprises pour modification.</p>
+        <p class="font-black">Les lignes du devis v{{ devis_reference.version }} sont reprises pour correction.</p>
         <p class="mt-1">Ajustez uniquement ce qui change, puis créez la nouvelle version pour accord client.</p>
+    </section>
+{% elif is_complementaire %}
+    <section class="mb-5 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950">
+        <p class="font-black">Devis complémentaire.</p>
+        <p class="mt-1">Saisissez uniquement les travaux supplémentaires. La facture additionnera le devis initial et les devis complémentaires approuvés.</p>
+    </section>
+{% endif %}
+
+{% if complements_remplaces %}
+    <section class="mb-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-950">
+        <p class="font-black">Attention : cette version complète remplacera les complémentaires approuvés dans la facture.</p>
+        <p class="mt-1">Si vous continuez, la facture finale partira de cette nouvelle version complète et n'additionnera plus les devis suivants :</p>
+        <ul class="mt-3 grid gap-1">
+            {% for complement in complements_remplaces %}
+            <li>v{{ complement.version }} - {{ complement.objet }} - {{ "%.2f"|format(complement.montant_ttc) }} MAD TTC</li>
+            {% endfor %}
+        </ul>
     </section>
 {% endif %}
 
 {% if is_sntl %}
     <section class="mb-5 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950">
-        <p class="font-black">Client SNTL : les pièces sont considérées comme neuves.</p>
-        <p class="mt-1">Le choix neuf/occasion n'est donc pas affiché pour ce devis.</p>
+        <p class="font-black">Modèle étatique / SNTL.</p>
+        <p class="mt-1">Les pièces restent en neuf. Les lignes de main d’œuvre seront séparées dans le total M.O du document officiel.</p>
     </section>
 {% endif %}
 
-<form method="post" class="grid gap-6 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+<form method="post"
+      action="{{ url_for('dossiers.modifier', devis_id=devis_a_modifier.id) if is_edit else request.path }}"
+      class="grid gap-6 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    {% if not is_edit %}
+    <input type="hidden" name="mode_devis" value="{{ 'complementaire' if is_complementaire else 'remplacement' }}">
+    {% endif %}
+    {% if complements_remplaces %}
+    <label class="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-950">
+        <input class="mt-1" type="checkbox" name="confirmer_remplacement_complements" value="1" required>
+        <span>Je confirme que cette version complète remplace les devis complémentaires approuvés listés ci-dessus dans la facture finale.</span>
+    </label>
+    {% endif %}
     <label class="grid gap-2 text-sm font-bold text-slate-800">
         Objet du devis
-        <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="objet" value="{% if devis_reference %}{{ devis_reference.objet }}{% else %}Devis {{ dossier.numero }}{% endif %}" required>
+        <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100"
+               name="objet"
+               value="{% if devis_reference %}{{ devis_reference.objet }}{% elif is_complementaire %}Devis complémentaire {{ dossier.numero }}{% else %}Devis {{ dossier.numero }}{% endif %}"
+               required>
     </label>
 
     <section>
@@ -46,34 +99,14 @@
         </div>
 
         <div class="mt-4 grid gap-3" data-lines>
-            {% if devis_reference and devis_reference.lignes %}
-                {% for ligne in devis_reference.lignes %}
-                    <div class="grid gap-3 rounded-md border border-slate-200 p-3 {% if is_sntl %}md:grid-cols-4{% else %}md:grid-cols-5{% endif %}">
-                        <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="designation" value="{{ ligne.designation }}" placeholder="Désignation">
-                        <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" type="number" step="0.01" name="quantite" value="{{ ligne.quantite }}" placeholder="Qté">
-                        <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" type="number" step="0.01" name="prix_unitaire_ht" value="{{ ligne.prix_unitaire_ht }}" placeholder="Prix HT">
-                        {% if not is_sntl %}
-                            <select class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="etat_piece">
-                                <option value="neuf" {% if ligne.etat_piece == 'neuf' %}selected{% endif %}>Neuf</option>
-                                <option value="occasion" {% if ligne.etat_piece == 'occasion' %}selected{% endif %}>Occasion</option>
-                            </select>
-                        {% endif %}
-                        <button class="h-11 rounded-md border border-red-200 bg-white px-3 text-sm font-black text-red-700" type="button" data-remove-line>Retirer</button>
-                    </div>
+            {% set lignes_initiales = devis_reference.lignes if devis_reference and devis_reference.lignes else [] %}
+            {% if lignes_initiales %}
+                {% for ligne in lignes_initiales %}
+                    {% include "dossiers/devis_ligne_form.html" %}
                 {% endfor %}
             {% else %}
-                <div class="grid gap-3 rounded-md border border-slate-200 p-3 {% if is_sntl %}md:grid-cols-4{% else %}md:grid-cols-5{% endif %}">
-                    <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="designation" placeholder="Désignation">
-                    <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" type="number" step="0.01" name="quantite" value="1" placeholder="Qté">
-                    <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" type="number" step="0.01" name="prix_unitaire_ht" placeholder="Prix HT">
-                    {% if not is_sntl %}
-                        <select class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="etat_piece">
-                            <option value="neuf">Neuf</option>
-                            <option value="occasion">Occasion</option>
-                        </select>
-                    {% endif %}
-                    <button class="h-11 rounded-md border border-red-200 bg-white px-3 text-sm font-black text-red-700" type="button" data-remove-line>Retirer</button>
-                </div>
+                {% set ligne = none %}
+                {% include "dossiers/devis_ligne_form.html" %}
             {% endif %}
         </div>
     </section>
@@ -84,23 +117,15 @@
     </label>
 
     <div class="flex justify-end border-t border-slate-200 pt-5">
-        <button class="h-11 rounded-md bg-monster-jaune px-5 text-sm font-black text-black transition hover:bg-yellow-300 focus:outline-none focus:ring-4 focus:ring-yellow-200" type="submit">Créer et attendre l'accord</button>
+        <button class="h-11 rounded-md bg-monster-jaune px-5 text-sm font-black text-black transition hover:bg-yellow-300 focus:outline-none focus:ring-4 focus:ring-yellow-200" type="submit">
+            {% if is_edit %}Enregistrer les modifications{% else %}Créer et attendre l'accord{% endif %}
+        </button>
     </div>
 </form>
 
 <template data-line-template>
-    <div class="grid gap-3 rounded-md border border-slate-200 p-3 {% if is_sntl %}md:grid-cols-4{% else %}md:grid-cols-5{% endif %}">
-        <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="designation" placeholder="Désignation">
-        <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" type="number" step="0.01" name="quantite" value="1" placeholder="Qté">
-        <input class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" type="number" step="0.01" name="prix_unitaire_ht" placeholder="Prix HT">
-        {% if not is_sntl %}
-            <select class="h-11 rounded-md border border-slate-300 px-3 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" name="etat_piece">
-                <option value="neuf">Neuf</option>
-                <option value="occasion">Occasion</option>
-            </select>
-        {% endif %}
-        <button class="h-11 rounded-md border border-red-200 bg-white px-3 text-sm font-black text-red-700" type="button" data-remove-line>Retirer</button>
-    </div>
+    {% set ligne = none %}
+    {% include "dossiers/devis_ligne_form.html" %}
 </template>
 
 <script>
@@ -110,31 +135,50 @@
         const addButton = document.querySelector("[data-add-line]");
         const addLaborButton = document.querySelector("[data-add-labor]");
 
-        const appendLine = ({ designation = "", quantite = "1", prix = "0" } = {}) => {
-            const line = template.content.firstElementChild.cloneNode(true);
-            line.querySelector('input[name="designation"]').value = designation;
-            line.querySelector('input[name="quantite"]').value = quantite;
-            line.querySelector('input[name="prix_unitaire_ht"]').value = prix;
-            const etatPiece = line.querySelector('select[name="etat_piece"]');
-            if (etatPiece) etatPiece.value = "neuf";
-            lines.append(line);
+        const syncLine = (line) => {
+            const type = line.querySelector('[name="type_ligne"]');
+            const etat = line.querySelector('[name="etat_piece"]');
+            const autre = line.querySelector('[data-etat-autre]');
+            const mo = line.querySelector('[data-type-mo]');
+            const isMo = type?.value === "main_oeuvre";
+            if (etat) {
+                etat.value = isMo ? "mo" : (etat.value === "mo" ? "neuf" : etat.value);
+                etat.disabled = isMo;
+            }
+            autre?.classList.toggle("hidden", etat?.value !== "autre" || isMo);
+            mo?.classList.toggle("hidden", !isMo);
         };
 
-        addButton?.addEventListener("click", () => {
-            appendLine();
-        });
+        const appendLine = ({ designation = "", quantite = "1", prix = "0", type = "piece" } = {}) => {
+            const line = template.content.firstElementChild.cloneNode(true);
+            line.querySelector('[name="designation"]').value = designation;
+            line.querySelector('[name="quantite"]').value = quantite;
+            line.querySelector('[name="prix_unitaire_ht"]').value = prix;
+            line.querySelector('[name="type_ligne"]').value = type;
+            lines.append(line);
+            syncLine(line);
+        };
+
+        addButton?.addEventListener("click", () => appendLine());
 
         addLaborButton?.addEventListener("click", () => {
             const prix = window.prompt("Coût main d'oeuvre HT", "0");
             if (prix === null) return;
-            appendLine({ designation: "Main d'oeuvre", quantite: "1", prix: prix || "0" });
+            appendLine({ designation: "Main d'oeuvre", quantite: "1", prix: prix || "0", type: "main_oeuvre" });
+        });
+
+        lines?.addEventListener("change", (event) => {
+            const line = event.target.closest("[data-devis-line]");
+            if (line) syncLine(line);
         });
 
         lines?.addEventListener("click", (event) => {
             if (!event.target.matches("[data-remove-line]")) return;
             if (lines.children.length === 1) return;
-            event.target.closest("div").remove();
+            event.target.closest("[data-devis-line]").remove();
         });
+
+        [...lines.children].forEach(syncLine);
     })();
 </script>
 {% endblock %}

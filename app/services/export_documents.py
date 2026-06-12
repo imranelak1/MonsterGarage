@@ -11,6 +11,7 @@ from openpyxl.utils import get_column_letter
 
 from app.models import Client, DevisReparation, FactureReparation
 from app.services.calculs_facturation import calculer_commission_sntl, param_percent
+from app.services.devis_totaux import calculer_totaux_lignes, montant_ttc_ligne, taux_tva_ligne
 from app.services.parametres import obtenir_entreprise
 
 
@@ -35,22 +36,8 @@ def exporter_devis_excel(devis: DevisReparation) -> bytes:
     ws = wb.active
     ws.title = f"DEVIS V{devis.version}"
     is_sntl = devis.dossier.client.type == "sntl"
-    if is_sntl:
-        _document_setup_sntl(ws)
-        _build_devis_sntl(ws, devis)
-        return _save(wb)
-
-    _document_setup(ws)
-    _build_document_reparation(
-        ws,
-        titre="DEVIS DE REPARATION",
-        numero=f"{devis.dossier.numero}-V{devis.version}",
-        date_document=devis.created_at,
-        devis=devis,
-        statut=devis.statut_libelle,
-        hide_etat=False,
-        include_commission_sntl=False,
-    )
+    _document_setup_devis_modele(ws, is_sntl=is_sntl)
+    _build_devis_modele(ws, devis, is_sntl=is_sntl)
     return _save(wb)
 
 
@@ -71,6 +58,10 @@ def exporter_facture_excel(facture: FactureReparation) -> bytes:
             date_document=facture.created_at,
             devis=facture.devis,
             statut=facture.statut_libelle,
+            lignes=facture.lignes_facture,
+            montant_ht=facture.montant_ht,
+            montant_tva=facture.montant_tva,
+            montant_ttc=facture.montant_ttc,
             montant_regle=facture.montant_regle,
             hide_etat=False,
             include_commission_sntl=False,
@@ -118,6 +109,14 @@ def exporter_situation_clients_excel(clients: list[Client], factures: list[Factu
 
     first_data_row = header_row + 1
     row = first_data_row
+    totals = {
+        3: 0,
+        4: Decimal("0.00"),
+        5: Decimal("0.00"),
+        6: Decimal("0.00"),
+        7: Decimal("0.00"),
+        8: Decimal("0.00"),
+    }
     for client in clients:
         client_factures = factures_par_client.get(client.id, [])
         if not client_factures:
@@ -129,6 +128,12 @@ def exporter_situation_clients_excel(clients: list[Client], factures: list[Factu
         encaisse = sum((Decimal(str(facture.montant_regle or 0)) for facture in client_factures), Decimal("0.00"))
         reste = max(net_a_regler - encaisse, Decimal("0.00"))
         derniere_facture = max(client_factures, key=lambda facture: facture.created_at)
+        totals[3] += len(client_factures)
+        totals[4] += total_ttc
+        totals[5] += commission
+        totals[6] += net_a_regler
+        totals[7] += encaisse
+        totals[8] += reste
 
         values = [
             client.nom,
@@ -162,7 +167,8 @@ def exporter_situation_clients_excel(clients: list[Client], factures: list[Factu
     total_row = max(first_data_row, row) + 1
     ws.cell(total_row, 2, "TOTAL").font = _font(bold=True, size=12)
     for col in (3, 4, 5, 6, 7, 8):
-        cell = ws.cell(total_row, col, f"=SUM({get_column_letter(col)}{first_data_row}:{get_column_letter(col)}{total_row - 1})")
+        value = totals[col] if col == 3 else _money(totals[col])
+        cell = ws.cell(total_row, col, value)
         cell.font = _font(bold=True, size=12)
         cell.fill = _fill(_AMBRE_PALE)
         cell.border = _border()
@@ -189,14 +195,19 @@ def _build_releve_client(ws, client: Client, factures: list[FactureReparation]) 
     _write_table_header(ws, header_row, headers)
 
     first_data_row = header_row + 1
+    total_montant = Decimal("0.00")
+    total_encaisse = Decimal("0.00")
     for index, facture in enumerate(factures, first_data_row):
         vehicule = facture.dossier.vehicule
-        encaisse = facture.montant_regle or Decimal("0.00")
+        montant_ttc = Decimal(str(facture.montant_ttc or 0)).quantize(Decimal("0.01"))
+        encaisse = Decimal(str(facture.montant_regle or 0)).quantize(Decimal("0.01"))
+        total_montant += montant_ttc
+        total_encaisse += encaisse
         values = [
             facture.numero,
             f"{vehicule.marque} {vehicule.modele}",
             vehicule.immatriculation,
-            _money(facture.montant_ttc),
+            _money(montant_ttc),
             _money(encaisse),
             f"=D{index}-E{index}",
             _date_value(facture.created_at),
@@ -211,8 +222,13 @@ def _build_releve_client(ws, client: Client, factures: list[FactureReparation]) 
 
     total_row = max(first_data_row, first_data_row + len(factures)) + 1
     ws.cell(total_row, 3, "TOTAL").font = _font(bold=True, size=12)
+    total_values = {
+        4: total_montant,
+        5: total_encaisse,
+        6: total_montant - total_encaisse,
+    }
     for col in (4, 5, 6):
-        cell = ws.cell(total_row, col, f"=SUM({get_column_letter(col)}{first_data_row}:{get_column_letter(col)}{total_row - 1})")
+        cell = ws.cell(total_row, col, _money(total_values[col]))
         cell.font = _font(bold=True, size=12)
         cell.fill = _fill(_AMBRE_PALE)
         cell.border = _border()
@@ -234,14 +250,21 @@ def _build_releve_sntl(ws, client: Client, factures: list[FactureReparation]) ->
         cell.border = _border()
 
     first_data_row = header_row + 1
+    total_ttc = Decimal("0.00")
+    total_commission = Decimal("0.00")
+    total_net_a_regler = Decimal("0.00")
     for row, facture in enumerate(factures, first_data_row):
         commission = _commission_releve_sntl(facture)
-        net_a_regler = Decimal(str(facture.montant_ttc or 0)).quantize(Decimal("0.01")) - commission
+        montant_ttc = Decimal(str(facture.montant_ttc or 0)).quantize(Decimal("0.01"))
+        net_a_regler = montant_ttc - commission
+        total_ttc += montant_ttc
+        total_commission += commission
+        total_net_a_regler += net_a_regler
         values = [
             facture.numero,
             _date_value(facture.created_at),
             _sntl_bon_number(facture.dossier, client),
-            _money(facture.montant_ttc),
+            _money(montant_ttc),
             _money(commission),
             _money(net_a_regler),
         ]
@@ -258,8 +281,13 @@ def _build_releve_sntl(ws, client: Client, factures: list[FactureReparation]) ->
     total_row = max(first_data_row, first_data_row + len(factures)) + 1
     ws.cell(total_row, 2, "Total")
     ws.cell(total_row, 2).font = _font(name=_SNTL_FONT, bold=True, size=12)
+    total_values = {
+        5: total_ttc,
+        6: total_commission,
+        7: total_net_a_regler,
+    }
     for col in (5, 6, 7):
-        cell = ws.cell(total_row, col, f"=SUM({get_column_letter(col)}{first_data_row}:{get_column_letter(col)}{total_row - 1})")
+        cell = ws.cell(total_row, col, _money(total_values[col]))
         cell.font = _font(name=_SNTL_FONT, bold=True, size=12)
         cell.border = _border()
         cell.number_format = '#,##0.00'
@@ -344,8 +372,20 @@ def _build_resume_vehicules(wb: Workbook, client: Client, factures: list[Facture
 
     total_row = max(first_row, first_row + len(grouped)) + 1
     ws.cell(total_row, 2, "TOTAL").font = _font(bold=True, size=12)
+    totals = {
+        3: 0,
+        4: Decimal("0.00"),
+        5: Decimal("0.00"),
+        6: Decimal("0.00"),
+    }
+    for item in grouped.values():
+        totals[3] += item["count"]
+        totals[4] += item["montant"]
+        totals[5] += item["encaisse"]
+        totals[6] += item["montant"] - item["encaisse"]
     for col in (3, 4, 5, 6):
-        cell = ws.cell(total_row, col, f"=SUM({get_column_letter(col)}{first_row}:{get_column_letter(col)}{total_row - 1})")
+        value = totals[col] if col == 3 else _money(totals[col])
+        cell = ws.cell(total_row, col, value)
         cell.font = _font(bold=True, size=12)
         cell.fill = _fill(_AMBRE_PALE)
         cell.border = _border()
@@ -366,6 +406,230 @@ def _build_devis_sntl(ws, devis: DevisReparation) -> None:
     )
 
 
+def _build_devis_modele(ws, devis: DevisReparation, *, is_sntl: bool) -> None:
+    dossier = devis.dossier
+    client = dossier.client
+    vehicule = dossier.vehicule
+    entreprise = obtenir_entreprise()
+    lignes = list(devis.lignes)
+    montant_ht, montant_tva, montant_ttc = calculer_totaux_lignes(lignes, client.type)
+    max_col = 7
+
+    ws.merge_cells("A1:D3")
+    ws["A1"].value = "MONSTER GARAGE"
+    ws["A1"].font = _font(bold=True, italic=True, size=24, color="FF2A93B0")
+    ws["A1"].alignment = _align("center")
+    _add_logo_at(ws, "F1", width=130, height=61)
+    for col in range(1, 8):
+        ws.cell(4, col).border = Border(bottom=Side(style="medium", color=_NOIR))
+
+    if is_sntl:
+        _devis_info_box(
+            ws,
+            6,
+            1,
+            [
+                ("Devis n°", _numero_devis_modele(devis)),
+                ("Date", _date_value(devis.created_at)),
+                ("Véhicule", f"{vehicule.marque} {vehicule.modele}".upper()),
+                ("Immatriculation", vehicule.immatriculation),
+                ("Kilométrage", dossier.kilometrage_entree or vehicule.kilometrage_actuel or ""),
+            ],
+            width=3,
+        )
+        _devis_info_box(
+            ws,
+            6,
+            5,
+            [
+                ("N°client", client.code),
+                ("Client", (client.administration_rattachee or client.nom).upper()),
+                ("Adresse", client.adresse or client.ville or ""),
+            ],
+            width=3,
+        )
+        header_row = 13
+        headers = ["Désignation", "Qté", "Prix HT", "Prix HT total", "TVA", "Total TTC"]
+    else:
+        _devis_info_lines(
+            ws,
+            6,
+            1,
+            [
+                ("Devis n°", _numero_devis_modele(devis)),
+                ("Date", _date_value(devis.created_at)),
+                ("Véhicule", f"{vehicule.marque} {vehicule.modele}".upper()),
+                ("Immatriculation", vehicule.immatriculation),
+            ],
+        )
+        _devis_info_lines(
+            ws,
+            6,
+            5,
+            [
+                ("Client", client.nom.upper()),
+                ("ICE n°", client.ice or ""),
+                ("Adresse", client.adresse or client.ville or ""),
+            ],
+        )
+        header_row = 12
+        headers = ["Désignation", "Qté", "Etat", "Prix HT", "Prix HT total", "TVA", "Total TTC"]
+
+    for offset, label in enumerate(headers, 1):
+        cell = ws.cell(header_row, offset, label)
+        cell.font = _font(bold=True, size=9)
+        cell.alignment = _align("center", wrap=True)
+        cell.border = _border()
+
+    first_line_row = header_row + 1
+    rows_count = max(10, len(lignes))
+    for offset in range(rows_count):
+        row = first_line_row + offset
+        ligne = lignes[offset] if offset < len(lignes) else None
+        values = _devis_modele_row_values(ligne, client.type, show_etat=not is_sntl)
+        ws.row_dimensions[row].height = 16
+        for col, value in enumerate(values, 1):
+            cell = ws.cell(row, col, value)
+            cell.font = _font(size=8)
+            cell.alignment = _align("center", wrap=True)
+            cell.border = _border()
+            if col in ({3, 4, 6} if is_sntl else {4, 5, 7}):
+                cell.number_format = '#,##0.00'
+
+    totals_row = first_line_row + rows_count + 1
+    label_col = len(headers) - 1
+    value_col = len(headers)
+    for offset, (label, value) in enumerate((("Total HT", montant_ht), ("TVA", montant_tva), ("Total TTC", montant_ttc))):
+        row = totals_row + offset
+        ws.cell(row, label_col, label)
+        ws.cell(row, value_col, float(value))
+        ws.cell(row, label_col).font = _font(bold=True, size=8)
+        ws.cell(row, value_col).font = _font(size=8)
+        ws.cell(row, value_col).number_format = '#,##0.00"MAD"'
+        _style_range(ws, row, label_col, row, value_col, border=_border(), alignment=_align("center"))
+
+    legal_row = totals_row + 6
+    ws.merge_cells(start_row=legal_row, start_column=1, end_row=legal_row, end_column=max_col)
+    ws.cell(legal_row, 1, f"Arrêté le présent devis à la somme de: {_capitalize(_amount_to_french(montant_ttc))} TTC")
+    ws.cell(legal_row, 1).font = _font(bold=True, italic=True, size=8)
+    ws.cell(legal_row, 1).alignment = _align("left", wrap=True)
+    ws.cell(legal_row + 2, 1, "Devis reçu avant l'exécution des travaux")
+    ws.cell(legal_row + 2, 1).font = _font(italic=True, size=8)
+
+    signature_row = legal_row + 8
+    ws.cell(signature_row, 5, "Date :")
+    ws.cell(signature_row + 2, 5, "Bon pour accord")
+    ws.cell(signature_row + 4, 5, "Signature client")
+    for row in (signature_row, signature_row + 2, signature_row + 4):
+        ws.cell(row, 5).font = _font(size=8)
+        ws.cell(row, 5).alignment = _align("center")
+
+    footer_row = signature_row + 9
+    footer_1 = _join_parts(f"RC: {entreprise.rc}", f"IF: {entreprise.if_fiscal}", f"ICE: {entreprise.ice}", f"Patente: {entreprise.patente}", sep=" / ")
+    footer_2 = f"Adresse: {entreprise.adresse}, {entreprise.ville}"
+    footer_3 = _join_parts(f"Tél: {entreprise.telephones}", f"E-mail: {entreprise.email}", sep=" / ")
+    for offset, text in enumerate((footer_1, footer_2, footer_3)):
+        row = footer_row + offset
+        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=max_col)
+        ws.cell(row, 1, text)
+        ws.cell(row, 1).font = _font(size=7)
+        ws.cell(row, 1).alignment = _align("center")
+    for col in range(1, max_col + 1):
+        ws.cell(footer_row - 1, col).border = Border(bottom=Side(style="medium", color=_NOIR))
+
+    ws.print_area = f"A1:{get_column_letter(max_col)}{footer_row + 2}"
+    _set_print_options(ws)
+
+
+def _devis_info_box(ws, row: int, col: int, rows: list[tuple[str, object]], *, width: int) -> None:
+    end_col = col + width - 1
+    end_row = row + len(rows) - 1
+    _style_range(ws, row, col, end_row, end_col, border=_border("FF808080"))
+    for index, (label, value) in enumerate(rows, row):
+        ws.cell(index, col, f"{label} :")
+        ws.cell(index, col + 1, _display(value))
+        if isinstance(value, date):
+            ws.cell(index, col + 1).number_format = "dd/mm/yyyy"
+        ws.cell(index, col).font = _font(size=8, color=_SLATE_500)
+        ws.cell(index, col + 1).font = _font(bold=True, size=8)
+        ws.cell(index, col).alignment = _align("left")
+        ws.cell(index, col + 1).alignment = _align("left", wrap=True)
+        if width > 2:
+            ws.merge_cells(start_row=index, start_column=col + 1, end_row=index, end_column=end_col)
+
+
+def _devis_info_lines(ws, row: int, col: int, rows: list[tuple[str, object]]) -> None:
+    for index, (label, value) in enumerate(rows, row):
+        ws.cell(index, col, f"{label}:")
+        ws.cell(index, col + 1, _display(value))
+        if isinstance(value, date):
+            ws.cell(index, col + 1).number_format = "dd/mm/yyyy"
+        ws.cell(index, col).font = _font(size=8, color=_SLATE_500)
+        ws.cell(index, col + 1).font = _font(bold=True, size=8)
+        ws.cell(index, col).alignment = _align("left")
+        ws.cell(index, col + 1).alignment = _align("left", wrap=True)
+
+
+def _devis_modele_row_values(ligne, client_type: str, *, show_etat: bool) -> list:
+    if ligne is None:
+        return [""] * (7 if show_etat else 6)
+
+    values = [
+        str(ligne.designation or "").upper(),
+        float(Decimal(str(ligne.quantite or 0))),
+        float(Decimal(str(ligne.prix_unitaire_ht or 0))),
+        float(Decimal(str(ligne.total_ht or 0))),
+        _percent_label(taux_tva_ligne(ligne, client_type)),
+        float(montant_ttc_ligne(ligne, client_type)),
+    ]
+    if show_etat:
+        values.insert(2, _etat_modele(ligne))
+    return values
+
+
+def _document_setup_devis_modele(ws, *, is_sntl: bool) -> None:
+    widths = [26, 8, 11, 14, 16, 9, 16] if not is_sntl else [30, 8, 14, 16, 9, 16, 2]
+    for index, width in enumerate(widths, 1):
+        ws.column_dimensions[get_column_letter(index)].width = width
+    for row in range(1, 55):
+        ws.row_dimensions[row].height = 15
+    ws.sheet_view.showGridLines = False
+    ws.page_setup.orientation = "portrait"
+    ws.page_setup.fitToWidth = 1
+    ws.page_margins.left = 0.35
+    ws.page_margins.right = 0.35
+    ws.page_margins.top = 0.35
+    ws.page_margins.bottom = 0.35
+
+
+def _add_logo_at(ws, anchor: str, *, width: int, height: int) -> None:
+    if not _LOGO_PATH.exists():
+        return
+    logo = XLImage(str(_LOGO_PATH))
+    logo.width = width
+    logo.height = height
+    logo.anchor = anchor
+    ws.add_image(logo)
+
+
+def _numero_devis_modele(devis: DevisReparation) -> str:
+    return f"{devis.dossier.numero}-V{devis.version}"
+
+
+def _etat_modele(ligne) -> str:
+    if getattr(ligne, "type_ligne", None) == "main_oeuvre" or getattr(ligne, "etat_piece", None) == "mo":
+        return "MO"
+    if getattr(ligne, "etat_piece", None) == "occasion":
+        return "OCC"
+    if getattr(ligne, "etat_piece", None) == "autre":
+        return str(getattr(ligne, "etat_piece_autre", "") or "AUTRE").upper()
+    return "NEUF"
+
+
+def _percent_label(rate: Decimal) -> str:
+    return f"{int((Decimal(str(rate)) * 100).quantize(Decimal('1')))}%"
+
+
 def _build_facture_sntl(ws, facture: FactureReparation) -> None:
     _build_sntl_official_document(
         ws,
@@ -374,6 +638,7 @@ def _build_facture_sntl(ws, facture: FactureReparation) -> None:
         numero=facture.numero,
         date_document=facture.created_at,
         include_commission=True,
+        lignes=facture.lignes_facture,
     )
 
 
@@ -385,6 +650,7 @@ def _build_sntl_official_document(
     numero: str,
     date_document,
     include_commission: bool,
+    lignes=None,
 ) -> None:
     dossier = devis.dossier
     client = dossier.client
@@ -428,7 +694,7 @@ def _build_sntl_official_document(
     ws.cell(19, 6).alignment = _align(wrap=True)
     _style_range(ws, 19, 6, 19, 7, border=_border())
 
-    article_lines, labor_total = _split_sntl_lines(devis.lignes)
+    article_lines, labor_total = _split_sntl_lines(lignes if lignes is not None else devis.lignes)
     article_start = 32
     min_article_rows = 10
     article_rows_count = max(min_article_rows, len(article_lines))
@@ -510,6 +776,10 @@ def _build_document_reparation(
     include_commission_sntl: bool,
     hide_etat: bool,
     montant_regle=None,
+    lignes=None,
+    montant_ht=None,
+    montant_tva=None,
+    montant_ttc=None,
 ) -> None:
     dossier = devis.dossier
     client = dossier.client
@@ -588,7 +858,12 @@ def _build_document_reparation(
     ws.merge_cells(start_row=table_row, start_column=2, end_row=table_row, end_column=designation_end_col)
 
     first_line_row = table_row + 1
-    for index, ligne in enumerate(devis.lignes, first_line_row):
+    lignes = list(lignes if lignes is not None else devis.lignes)
+    montant_ht = devis.montant_ht if montant_ht is None else montant_ht
+    montant_tva = devis.montant_tva if montant_tva is None else montant_tva
+    montant_ttc = devis.montant_ttc if montant_ttc is None else montant_ttc
+
+    for index, ligne in enumerate(lignes, first_line_row):
         if hide_etat:
             values = [
                 f"REF-{index - table_row:03d}",
@@ -616,21 +891,21 @@ def _build_document_reparation(
                 cell.number_format = '#,##0.00 "MAD"'
         ws.merge_cells(start_row=index, start_column=2, end_row=index, end_column=designation_end_col)
 
-    last_line_row = max(first_line_row, first_line_row + len(devis.lignes) - 1)
+    last_line_row = max(first_line_row, first_line_row + len(lignes) - 1)
     totals_row = last_line_row + 2
     _totals_block(
         ws,
         totals_row,
-        devis.montant_ht,
-        devis.montant_tva,
-        devis.montant_ttc,
+        montant_ht,
+        montant_tva,
+        montant_ttc,
         montant_regle=montant_regle,
         include_commission_sntl=include_commission_sntl,
     )
 
     note_row = totals_row + (10 if include_commission_sntl else 7)
     ws.merge_cells(start_row=note_row, start_column=1, end_row=note_row, end_column=7)
-    ws.cell(note_row, 1, _arrete(float(devis.montant_ttc))).alignment = _align("left", wrap=True)
+    ws.cell(note_row, 1, _arrete(float(montant_ttc))).alignment = _align("left", wrap=True)
     ws.cell(note_row, 1).font = _font(bold=True, size=10)
 
     if devis.notes:
@@ -909,7 +1184,7 @@ def _split_sntl_lines(lines) -> tuple[list, Decimal]:
     article_lines = []
     labor_total = Decimal("0.00")
     for line in lines:
-        if _is_labor_line(line.designation):
+        if getattr(line, "type_ligne", None) == "main_oeuvre" or _is_labor_line(line.designation):
             labor_total += Decimal(str(line.total_ht or 0))
         else:
             article_lines.append(line)
