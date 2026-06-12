@@ -17,6 +17,9 @@ depends_on = None
 
 def upgrade():
     bind = op.get_bind()
+    if bind.dialect.name == "sqlite":
+        op.execute("PRAGMA busy_timeout=60000")
+
     inspector = sa.inspect(bind)
 
     lignes_columns = _column_names(inspector, "lignes_devis_reparation")
