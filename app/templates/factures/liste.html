@@ -26,7 +26,7 @@
             <option value="reglee" {% if statut == 'reglee' %}selected{% endif %}>Réglée</option>
             <option value="annulee" {% if statut == 'annulee' %}selected{% endif %}>Annulée</option>
         </select>
-        <input class="h-11 rounded-md border border-slate-300 px-3 text-sm font-semibold text-slate-700 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" type="date" name="date_debut" value="{{ periode.valeur_debut }}" aria-label="Date debut">
+        <input class="h-11 rounded-md border border-slate-300 px-3 text-sm font-semibold text-slate-700 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" type="date" name="date_debut" value="{{ periode.valeur_debut }}" aria-label="Date début">
         <input class="h-11 rounded-md border border-slate-300 px-3 text-sm font-semibold text-slate-700 outline-none focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100" type="date" name="date_fin" value="{{ periode.valeur_fin }}" aria-label="Date fin">
         <button class="h-11 rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50" type="submit">Filtrer</button>
     </form>

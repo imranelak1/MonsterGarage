@@ -120,7 +120,7 @@ def enregistrer_reglement(facture: FactureReparation, mode_reglement: str, monta
         action = "paiement_partiel"
         details = (
             f"Paiement partiel de {montant_reglement} MAD enregistre pour la facture {facture.numero}. "
-            f"Reste a payer : {facture.montant_restant} MAD."
+            f"Reste à payer : {facture.montant_restant} MAD."
         )
 
     journaliser(facture.dossier, action, details)

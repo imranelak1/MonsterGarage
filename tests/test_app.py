@@ -1759,8 +1759,8 @@ def test_facture_accepte_paiements_partiels_sans_depassement(client, app):
     export_response = client.get(f"/factures/{facture_id}/telecharger")
     wb = load_workbook(BytesIO(export_response.data), data_only=False)
     ws = wb.active
-    assert "Montant encaisse" in [cell.value for row in ws.iter_rows() for cell in row if cell.value]
-    assert "Reste a payer" in [cell.value for row in ws.iter_rows() for cell in row if cell.value]
+    assert "Montant encaissé" in [cell.value for row in ws.iter_rows() for cell in row if cell.value]
+    assert "Reste à payer" in [cell.value for row in ws.iter_rows() for cell in row if cell.value]
     assert 100 in [cell.value for row in ws.iter_rows() for cell in row if cell.value is not None]
     assert 140 in [cell.value for row in ws.iter_rows() for cell in row if cell.value is not None]
     releve_response = client.get(f"/factures/clients/{client_id}/releve")
@@ -2171,7 +2171,7 @@ def test_export_releve_client_excel(client, app):
     wb = load_workbook(BytesIO(response.data), data_only=False)
     assert_classeur_sans_sntl(wb)
     ws = wb.active
-    assert ws["A9"].value == "N FACTURE"
+    assert ws["A9"].value == "N° FACTURE"
     assert ws["D9"].value == "MONTANT FACTURE"
     assert ws.freeze_panes is None
     assert ws["F10"].value == "=D10-E10"
@@ -2181,9 +2181,9 @@ def test_export_releve_client_excel(client, app):
     assert values_ws["D13"].value == 600
     assert values_ws["E13"].value == 0
     assert values_ws["F13"].value == 600
-    assert "RESUME VEHICULES" in wb.sheetnames
-    resume = wb["RESUME VEHICULES"]
-    assert resume["A7"].value == "VEHICULE"
+    assert "RÉSUMÉ VÉHICULES" in wb.sheetnames
+    resume = wb["RÉSUMÉ VÉHICULES"]
+    assert resume["A7"].value == "VÉHICULE"
     assert resume["B7"].value == "IMMATRICULATION"
     assert resume["A8"].value == "Toyota Hilux"
     assert resume["B8"].value == "1111-F-6"
@@ -2195,7 +2195,7 @@ def test_export_releve_client_excel(client, app):
     assert resume["C9"].value == 1
     assert resume["D9"].value == 360
     assert resume["F9"].value == 360
-    resume_values = values_wb["RESUME VEHICULES"]
+    resume_values = values_wb["RÉSUMÉ VÉHICULES"]
     assert resume_values["C11"].value == 2
     assert resume_values["D11"].value == 600
     assert resume_values["F11"].value == 600
@@ -2207,7 +2207,7 @@ def test_export_releve_client_excel(client, app):
     assert summary["A9"].value == "CLIENT"
     assert summary["D9"].value == "MONTANT TTC"
     assert summary["E9"].value == "COMMISSION SNTL"
-    assert summary["F9"].value == "NET A REGLER"
+    assert summary["F9"].value == "NET À RÉGLER"
     assert summary["A10"].value == "Client Workflow"
     assert summary["C10"].value == 2
     assert summary["D10"].value == 600

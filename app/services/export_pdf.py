@@ -413,14 +413,14 @@ def _build_sntl_document_pdf(
         totals.extend(
             [
                 (f"Commission SNTL (1x{int(commission * 100)}%) (4)", commission_sntl.commission_ht, "wide"),
-                (f"TVA {int(tva * 100)}% sur la comission (4x{int(tva * 100)}%) (5)", commission_sntl.tva_commission, "wide"),
+                (f"TVA {int(tva * 100)}% sur la commission (4x{int(tva * 100)}%) (5)", commission_sntl.tva_commission, "wide"),
                 ("Montant Net à régler (3-4-5)", commission_sntl.net_a_regler, "wide"),
             ]
         )
 
     next_top = _draw_sntl_totals(ctx, totals_top, totals, row_height)
-    phrase_subject = "la presente facture" if "FACTURE" in titre.upper() else "le present devis"
-    phrase = f"Arrete {phrase_subject} a la somme de {_capitalize(_amount_to_french(montant_ttc))} TTC"
+    phrase_subject = "la présente facture" if "FACTURE" in titre.upper() else "le présent devis"
+    phrase = f"Arrêté {phrase_subject} à la somme de {_capitalize(_amount_to_french(montant_ttc))} TTC"
     ctx.text(_SNTL_X[2], next_top - 18, phrase, size=8)
     ctx.text(_SNTL_X[5], next_top - 58, "Cachet et signature", size=8)
     ctx.text(_SNTL_X[2], 56, "* Non valable pour les bons ateliers ''A\"", size=8)
@@ -466,7 +466,7 @@ def _build_document_pdf(
             ("Raison sociale", entreprise.raison_sociale),
             ("Nom commercial", entreprise.nom_commercial),
             ("Adresse", entreprise.adresse),
-            ("Telephone", entreprise.telephones),
+            ("Téléphone", entreprise.telephones),
             ("ICE", entreprise.ice),
             ("RC / IF", _join_parts(entreprise.rc, entreprise.if_fiscal, sep=" / ")),
         ],
@@ -474,7 +474,7 @@ def _build_document_pdf(
         right_rows=[
             ("Nom", client.nom),
             ("Type", client.type_libelle),
-            ("Telephone", client.telephone),
+            ("Téléphone", client.telephone),
             ("Ville", client.ville),
             ("ICE", client.ice),
             ("Administration", client.administration_rattachee),
@@ -483,11 +483,11 @@ def _build_document_pdf(
     y = _draw_info_blocks(
         ctx,
         y - 12,
-        left_title="VEHICULE",
+        left_title="VÉHICULE",
         left_rows=[
             ("Matricule", vehicule.immatriculation),
-            ("Marque / modele", f"{vehicule.marque} {vehicule.modele}"),
-            ("Kilometrage", dossier.kilometrage_entree or vehicule.kilometrage_actuel),
+            ("Marque / modèle", f"{vehicule.marque} {vehicule.modele}"),
+            ("Kilométrage", dossier.kilometrage_entree or vehicule.kilometrage_actuel),
         ],
         right_title="DOSSIER",
         right_rows=dossier_rows,
@@ -604,7 +604,7 @@ def _draw_totals(ctx: "_PageContext", y: float, montant_ht, montant_tva, montant
     if montant_regle is not None:
         montant_regle = Decimal(str(montant_regle or 0)).quantize(Decimal("0.01"))
         reste = max(Decimal(str(montant_ttc or 0)) - montant_regle, Decimal("0.00"))
-        rows.extend([("Montant encaisse", montant_regle), ("Reste a payer", reste)])
+        rows.extend([("Montant encaissé", montant_regle), ("Reste à payer", reste)])
 
     x = 346
     for label, amount in rows:
@@ -991,7 +991,7 @@ def _join_parts(*parts, sep=", ") -> str:
 
 
 def _arrete(amount) -> str:
-    return f"Arrete le present document a la somme de {_money(amount)} TTC."
+    return f"Arrêté le présent document à la somme de {_money(amount)} TTC."
 
 
 def _param_percent(cle: str, default: Decimal) -> Decimal:

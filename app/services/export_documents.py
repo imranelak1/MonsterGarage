@@ -73,7 +73,7 @@ def exporter_releve_client_excel(client: Client, factures: list[FactureReparatio
     wb = Workbook()
     ws = wb.active
     if client.type == "sntl":
-        ws.title = "RELEVE SNTL"
+        ws.title = "RELEVÉ SNTL"
         _build_releve_sntl(ws, client, factures)
         return _save(wb)
 
@@ -95,10 +95,10 @@ def exporter_situation_clients_excel(clients: list[Client], factures: list[Factu
         "NB FACTURES",
         "MONTANT TTC",
         "COMMISSION SNTL",
-        "NET A REGLER",
-        "ENCAISSE",
-        "A ENCAISSER",
-        "DERNIERE FACTURE",
+        "NET À RÉGLER",
+        "ENCAISSÉ",
+        "À ENCAISSER",
+        "DERNIÈRE FACTURE",
     ]
     header_row = 9
     _write_table_header(ws, header_row, headers)
@@ -190,7 +190,7 @@ def _build_releve_client(ws, client: Client, factures: list[FactureReparation]) 
     ws["A6"].font = _font(bold=True, size=12, color=_SLATE_950)
     ws["A6"].alignment = _align("center")
 
-    headers = ["N FACTURE", "VEHICULE", "IMMATRICULATION", "MONTANT FACTURE", "ENCAISSE", "A ENCAISSER", "DATE", "STATUT"]
+    headers = ["N° FACTURE", "VÉHICULE", "IMMATRICULATION", "MONTANT FACTURE", "ENCAISSÉ", "À ENCAISSER", "DATE", "STATUT"]
     header_row = 9
     _write_table_header(ws, header_row, headers)
 
@@ -314,11 +314,11 @@ def nom_fichier_releve_client(client: Client) -> str:
 
 
 def _build_resume_vehicules(wb: Workbook, client: Client, factures: list[FactureReparation]) -> None:
-    ws = wb.create_sheet("RESUME VEHICULES")
+    ws = wb.create_sheet("RÉSUMÉ VÉHICULES")
     _document_setup(ws, widths=[28, 22, 16, 18, 18, 18, 18])
-    _build_header(ws, f"RESUME VEHICULES - {client.nom.upper()}", client.type_libelle.upper(), date.today())
+    _build_header(ws, f"RÉSUMÉ VÉHICULES - {client.nom.upper()}", client.type_libelle.upper(), date.today())
 
-    headers = ["VEHICULE", "IMMATRICULATION", "NB FACTURES", "MONTANT FACTURE", "ENCAISSE", "A ENCAISSER", "DERNIERE FACTURE"]
+    headers = ["VÉHICULE", "IMMATRICULATION", "NB FACTURES", "MONTANT FACTURE", "ENCAISSÉ", "À ENCAISSER", "DERNIÈRE FACTURE"]
     header_row = 7
     for col, value in enumerate(headers, 1):
         cell = ws.cell(header_row, col, value)
@@ -744,7 +744,7 @@ def _build_sntl_official_document(
     _sntl_total_row(ws, totals_start + 4, "Montant Total TTC (1+2) (3)", montant_ttc)
     if include_commission:
         _sntl_total_row(ws, totals_start + 5, f"Commission SNTL (1x{int(commission * 100)}%) (4)", commission_sntl.commission_ht, rate=commission)
-        _sntl_total_row(ws, totals_start + 6, f"TVA {int(tva * 100)}% sur la comission (4x{int(tva * 100)}%) (5)", commission_sntl.tva_commission, rate=tva)
+        _sntl_total_row(ws, totals_start + 6, f"TVA {int(tva * 100)}% sur la commission (4x{int(tva * 100)}%) (5)", commission_sntl.tva_commission, rate=tva)
         _sntl_total_row(ws, totals_start + 7, "Montant Net à régler (3-4-5)", commission_sntl.net_a_regler, bold_value=True)
 
     phrase_row = totals_start + (9 if include_commission else 7)
@@ -802,7 +802,7 @@ def _build_document_reparation(
         ("Raison sociale", entreprise.raison_sociale),
         ("Adresse", entreprise.adresse),
         ("Ville", entreprise.ville),
-        ("Telephone", entreprise.telephones),
+        ("Téléphone", entreprise.telephones),
         ("ICE", entreprise.ice),
         ("RC / IF", _join_parts(entreprise.rc, entreprise.if_fiscal, sep=" / ")),
         ("RIB", entreprise.rib),
@@ -810,7 +810,7 @@ def _build_document_reparation(
     client_infos = [
         ("Nom", client.nom),
         ("Type", client.type_libelle),
-        ("Telephone", client.telephone),
+        ("Téléphone", client.telephone),
         ("Adresse", client.adresse),
         ("Ville", client.ville),
         ("ICE", client.ice),
@@ -823,15 +823,15 @@ def _build_document_reparation(
 
     vehicle_row = 16
     ws.merge_cells(start_row=vehicle_row, start_column=1, end_row=vehicle_row, end_column=7)
-    ws.cell(vehicle_row, 1, "VEHICULE").fill = _fill(_SLATE_950)
+    ws.cell(vehicle_row, 1, "VÉHICULE").fill = _fill(_SLATE_950)
     ws.cell(vehicle_row, 1).font = _font(bold=True, color=_JAUNE)
     ws.cell(vehicle_row, 1).alignment = _align("center")
     _style_range(ws, vehicle_row, 1, vehicle_row, 7, border=_border())
 
     vehicle_infos = [
         ("Matricule", vehicule.immatriculation),
-        ("Marque et modele", f"{vehicule.marque} {vehicule.modele}"),
-        ("Kilometrage", dossier.kilometrage_entree or vehicule.kilometrage_actuel),
+        ("Marque et modèle", f"{vehicule.marque} {vehicule.modele}"),
+        ("Kilométrage", dossier.kilometrage_entree or vehicule.kilometrage_actuel),
         ("Dossier", dossier.numero),
         ("Statut", statut),
         ("Assurance", dossier.assurance_nom),
@@ -947,8 +947,8 @@ def _totals_block(
         reste = max(montant_ttc - montant_regle, Decimal("0.00"))
         rows.extend(
             [
-                ("Montant encaisse", _money(montant_regle), _VERT_PALE),
-                ("Reste a payer", _money(reste), _ROUGE_PALE if reste else _VERT_PALE),
+                ("Montant encaissé", _money(montant_regle), _VERT_PALE),
+                ("Reste à payer", _money(reste), _ROUGE_PALE if reste else _VERT_PALE),
             ]
         )
     if include_commission_sntl:
@@ -956,7 +956,7 @@ def _totals_block(
             [
                 (f"Commission SNTL {int(commission * 100)}%", _money(commission_sntl.commission_ht), _ROUGE_PALE),
                 (f"TVA {int(tva * 100)}% sur commission", _money(commission_sntl.tva_commission), _ROUGE_PALE),
-                ("Montant net a regler", _money(commission_sntl.net_a_regler), _VERT_PALE),
+                ("Montant net à régler", _money(commission_sntl.net_a_regler), _VERT_PALE),
             ]
         )
 
@@ -1302,7 +1302,7 @@ def _join_parts(*parts, sep=", ") -> str:
 
 
 def _arrete(amount: float) -> str:
-    return f"Arrete le present document a la somme de {amount:,.2f} dirhams TTC.".replace(",", " ")
+    return f"Arrêté le présent document à la somme de {amount:,.2f} dirhams TTC.".replace(",", " ")
 
 
 def _amount_to_french(amount: Decimal) -> str:
